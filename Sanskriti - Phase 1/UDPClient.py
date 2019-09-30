@@ -36,6 +36,8 @@ def onClick():
 	else:
 		infoLabel = tk.Label(rootView, text="Image sent to specified server!")
 		infoLabel.grid(column=0, row=10)
+		infoNextLable = tk.Label(rootView, text="Waiting on server...")
+		infoNextLable.grid(column=0,row=12)
 		# Server Port chosen arbitrarily
 		serverPort = 12000
 		# Buffer size set to 64kB
@@ -68,11 +70,12 @@ def onClick():
 			if (modifiedMessage == b''):
 				recieveFile = False
 
-		print(modifiedMessage)
-
 		with open('temp1.bin', 'ab+') as file:
 			for n in range(len(final)):
 				file.write(final[n])
+
+		infoNextLable = tk.Label(rootView, text="Server Response Complete!")
+		infoNextLable.grid(column=0, row=12)
 
 		image = Image.open('temp1.bin')
 		image.show()
