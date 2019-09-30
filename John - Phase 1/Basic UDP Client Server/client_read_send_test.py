@@ -25,7 +25,7 @@ while cont == 'Y':
 
         clientPartImgBytes = ogPyImg.read(4096) # was 1024 reads image files, cant read bytes or PILf image object
         clientSocket.sendto(clientPartImgBytes,(serverName, serverPort)) # send piece of image
-        #print(clientPartImgBytes) # usefull to verify splitting of data
+        print(clientPartImgBytes) # usefull to verify splitting of data
         # possibly automatically sends empty b'' as last since thats what prints out, easy built in EOF flag
         time.sleep(0.010) # (x) second delay. trying to reduce from 0.010
 
