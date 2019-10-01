@@ -2,20 +2,22 @@
 #Author: Sanskriti Sharma
 #Based on code snippet from "Computer Networking: A Top-Down Approach by Kurose, Ross" pg 199
 
-#import the socket module, the pillow module, io module, os module the tkinter module, and threading module
+#import the socket module, the pillow module, io module, os module the tkinter module, multiprocessing module,
+# and the signal module
 import socket
 from PIL import Image
 import io
 import os
 import tkinter as tk
-import threading
+import multiprocessing
+import signal
 
 # Class serving as the point for the thread that will do the background work behind the GUI
-class ServerThread(threading.Thread):
-	def __init__(self):
-		threading.Thread.__init__(self)
+class ServerThread(multiprocessing.Process):
+	def __init__(self):							# function to initiate the class
+		multiprocessing.Process.__init__(self)
 
-	def run(self):
+	def run(self):								# the actual run of the background process
 		# The server port and buffer are set to the same as the client
 		serverPort = 12000
 		buf = 5000
@@ -68,9 +70,13 @@ class ServerThread(threading.Thread):
 					if (finalMessage == (b'')):
 						break
 
+	def kill(self):		# Function definition to kill the running process in a multiprocessing situation
+		os.kill(self.pid, signal.SIGKILL)
+
 # Creates a new window interface and labels it
 rootView = tk.Tk()
 rootView.title("Server Package")
+rootView.geometry("400x400")
 
 # Creates a top label giving the hostname and IP address of the server
 serverHostname = socket.gethostname()  # acquires hostname of machine used to run server
@@ -85,9 +91,12 @@ IPANameLabel.grid(column=0, row=2)
 infoLabel = tk.Label(rootView, text="Please enter the IPA of the above into the 'Client Package'")
 infoLabel.grid(column=0, row=4)
 
-# Start the thread of the server application
-# WARNING: Thread is not killed when the GUI is closed
-ServerThread().start()
+# Start multiprocessing the background activity of the server application
+process = ServerThread()
+process.start()
 
 # Show the window GUI in the OS of the user
 rootView.mainloop()
+
+# Kill the additional process running in the background
+process.kill()

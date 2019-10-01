@@ -18,8 +18,10 @@ topLabel = tk.Label(rootView, text="If you are unsure of server hostname or IP p
 topLabel.grid(column=0, row=0)
 topNextLabel = tk.Label(rootView, text="The hostname is not case sensitive and works on machines with multiple IPs.")
 topNextLabel.grid(column=0, row=2)
-IPLabel = tk.Label(rootView, text="Input destination Server IPA: ")
+IPLabel = tk.Label(rootView, text="Input destination Server IPA (or hostname): ")
 IPLabel.grid(column=0, row=4)
+hintLabel = tk.Label(rootView, text="(Hint: The 'Server Package' must be open BEFORE sending to prevent crashing)")
+hintLabel.grid(column=0, row=8)
 
 # Creates a textbox to input information
     # The 'Entry' view that will contain the information given by the user
@@ -30,14 +32,16 @@ hostNameView.grid(column=0, row=6)
 def onClick():
 	# Server name is set to localhost as we are working on one system
 	serverName = hostNameView.get()
+	infoNextLable = tk.Label(rootView, text="                    ")
+	infoNextLable.grid(column=0, row=14)
 	if serverName == "":
 		infoLabel = tk.Label(rootView, text="Please input a server address before trying to send!!!")
-		infoLabel.grid(column=0, row=10)
+		infoLabel.grid(column=0, row=12)
 	else:
 		infoLabel = tk.Label(rootView, text="Image sent to specified server!")
-		infoLabel.grid(column=0, row=10)
+		infoLabel.grid(column=0, row=12)
 		infoNextLable = tk.Label(rootView, text="Waiting on server...")
-		infoNextLable.grid(column=0,row=12)
+		infoNextLable.grid(column=0,row=14)
 		# Server Port chosen arbitrarily
 		serverPort = 12000
 		# Buffer size set to 64kB
@@ -75,7 +79,7 @@ def onClick():
 				file.write(final[n])
 
 		infoNextLable = tk.Label(rootView, text="Server Response Complete!")
-		infoNextLable.grid(column=0, row=12)
+		infoNextLable.grid(column=0, row=14)
 
 		image = Image.open('temp1.bin')
 		image.show()
@@ -84,7 +88,7 @@ def onClick():
 
 # Creates a button to initiate the send and to show sending info
 sendButton = tk.Button(rootView, text="Send Image", command=onClick)
-sendButton.grid(column=0, row=8)
+sendButton.grid(column=0, row=10)
 
 # Show the window GUI in the OS of the user
 rootView.mainloop()
