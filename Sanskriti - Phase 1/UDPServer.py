@@ -1,5 +1,5 @@
 #File name: UDPClient.py
-#Author: Sanskriti Sharma
+#Author: Sanskriti Sharma, John Lutz, Justice Graves
 #Based on code snippet from "Computer Networking: A Top-Down Approach by Kurose, Ross" pg 199
 
 #import the socket module, the pillow module, io module, os module the tkinter module, multiprocessing module,
@@ -28,25 +28,24 @@ class ServerThread(multiprocessing.Process):
 		# The port number 12000 is bound to the server’s socket.
 		serverSocket.bind(('', serverPort))
 
+		# Deleting temporary files if they exists
 		if os.path.exists("temp.bin"):
 			os.remove("temp.bin")
 		if os.path.exists("final.bmp"):
 			os.remove("final.bmp")
 
 		message = []
-
 		# Enters an indefinite loop
 		while True:
-
 			receiveFile = True
 			while receiveFile:
 				# The message is recieved from the client and the client address is saved
 				output, clientAddress = serverSocket.recvfrom(buf)
-
 				message.append(output)
 				if (output == b''):
 					receiveFile = False
 
+			# Write message to a file
 			with open('temp.bin', 'ab+') as file:
 				for n in range(len(message)):
 					file.write(message[n])
@@ -60,8 +59,6 @@ class ServerThread(multiprocessing.Process):
 			imgByteArr = io.BytesIO()
 			# modifiedImage.save(imgByteArr, format='BMP')
 			modifiedImage.save('final.bmp')
-			# The values of the buffer are returned and saved to "finalMessage"
-			# finalMessage = imgByteArr.getvalue()
 			# the final message is sent to the client
 			with open("final.bmp", "rb") as final:
 				while True:
