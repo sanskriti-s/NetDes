@@ -14,10 +14,10 @@ import signal
 
 # Class serving as the point for the thread that will do the background work behind the GUI
 class ServerThread(multiprocessing.Process):
-	def __init__(self):							# function to initiate the class
+	def __init__(self): # function to initiate the class
 		multiprocessing.Process.__init__(self)
 
-	def run(self):								# the actual run of the background process
+	def run(self): # the actual run of the background process
 		# The server port and buffer are set to the same as the client
 		serverPort = 12000
 		buf = 5000
@@ -25,7 +25,7 @@ class ServerThread(multiprocessing.Process):
 		# AF_INET indicates that the underlying network is using IPv4.
 		# SOCK_DGRAM means it is a UDP socket (rather than a TCP socket.)
 		serverSocket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-		# The port number 12000 is bound to the server’s socket.
+		# The port number 12000 is bound to the servers socket.
 		serverSocket.bind(('', serverPort))
 
 		# Deleting temporary files if they exists
