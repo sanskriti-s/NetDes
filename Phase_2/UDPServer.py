@@ -2,8 +2,7 @@
 #Author: Sanskriti Sharma, John Lutz, Justice Graves
 #Based on code snippet from "Computer Networking: A Top-Down Approach by Kurose, Ross" pg 199
 
-#import the socket module, the pillow module, io module, os module the tkinter module, multiprocessing module,
-# and the signal module
+#import the socket, pillow, io, os, tkinter, multiprocessing and signal modules
 import socket
 from PIL import Image
 import io
@@ -14,10 +13,10 @@ import signal
 
 # Class serving as the point for the thread that will do the background work behind the GUI
 class ServerThread(multiprocessing.Process):
-	def __init__(self):							# function to initiate the class
+	def __init__(self): # function to initiate the class
 		multiprocessing.Process.__init__(self)
 
-	def run(self):								# the actual run of the background process
+	def run(self): # the actual run of the background process
 		# The server port and buffer are set to the same as the client
 		serverPort = 12000
 		buf = 5000
@@ -67,7 +66,7 @@ class ServerThread(multiprocessing.Process):
 					if (finalMessage == (b'')):
 						break
 
-	def kill(self):		# Function definition to kill the running process in a multiprocessing situation
+	def kill(self): # Function definition to kill the running process in a multiprocessing situation
 		os.kill(self.pid, signal.SIGABRT)
 
 # Creates a new window interface and labels it
