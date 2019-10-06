@@ -1,4 +1,4 @@
-#File name: UDPClient.py
+﻿#File name: UDPClient.py
 #Author: Sanskriti Sharma, John Lutz, Justice Graves
 #Based on code snippet from "Computer Networking: A Top-Down Approach by Kurose, Ross" pg 199
 
@@ -25,7 +25,7 @@ class ServerThread(multiprocessing.Process):
 		# AF_INET indicates that the underlying network is using IPv4.
 		# SOCK_DGRAM means it is a UDP socket (rather than a TCP socket.)
 		serverSocket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-		# The port number 12000 is bound to the server’s socket.
+		# The port number 12000 is bound to the servers socket.
 		serverSocket.bind(('', serverPort))
 
 		# Deleting temporary files if they exists
