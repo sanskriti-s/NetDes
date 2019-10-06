@@ -84,7 +84,7 @@ IPANameLabel = tk.Label(rootView, text="Server IPA is: " + serverIP)
 IPANameLabel.grid(column=0, row=2)
 
 # Additional instructions to tell the user what to put into the Client Package
-infoLabel = tk.Label(rootView, text="Please enter the IPA of the above into the 'Client Package'")
+infoLabel = tk.Label(rootView, text="Please enter the HostName or IPA of the above into the 'Client Package'")
 infoLabel.grid(column=0, row=4)
 
 # Start multiprocessing the background activity of the server application
