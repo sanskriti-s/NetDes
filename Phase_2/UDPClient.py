@@ -59,8 +59,10 @@ def onClick():
     serverName = hostNameView.get()
     if serverName == "":
         stateLog.insert(tk.END, "Error: Cannot Send, Invalid Server IPA/Name\n")
+        stateLog.yview(tk.END)
     else:
         stateLog.insert(tk.END, "Sending image data...\n")
+        stateLog.yview(tk.END)
         sequenceNumberInt = 1
         # The variable message is set to the pixel values of image.bmp
         with open("image1.bmp", "rb") as image:
@@ -85,6 +87,7 @@ def onClick():
                 # Break when message ends
                 if message == b'':
                     stateLog.insert(tk.END, "... Image sent completely\n")
+                    stateLog.yview(tk.END)
                     break
 
 # Generate the checksum for the given 1kB chunk of data and SN
