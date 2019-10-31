@@ -4,10 +4,8 @@
 
 # import the socket module, the pillow module, the os module, and the tkinter module
 import socket
-from PIL import Image
-import os
 import tkinter as tk
-import math
+from tkinter import scrolledtext
 
 # Creates a new window interface and labels it
 rootView = tk.Tk()
@@ -28,38 +26,41 @@ hintLabel.grid(column=0, row=8)
 # The 'Entry' view that will contain the information given by the user
 hostNameView = tk.Entry(rootView, width=20)
 hostNameView.grid(column=0, row=6)
+hostNameView.focus()
 
+# Creates labels and a spin object to choose the error level in the GUI
+spinnerLabel = tk.Label(rootView, text="Choose error percentage below:")
+spinnerLabel.grid(column=0, row=14)
+errorSpinner = tk.Spinbox(rootView, from_=0, to=100, width = 5)
+errorSpinner.grid(column=0, row=16)
+
+# Creates a state/message log in the GUI
+stateLog = scrolledtext.ScrolledText(rootView, width=60, height=10)
+stateLog.grid(column=0, row=20)
+stateLog.insert(tk.END, "Client State Log:\n")
+
+# The UDP socket is created.
+# The UDP socket is created same as the client.
+# AF_INET indicates that the underlying network is using IPv4.
+# SOCK_DGRAM means it is a UDP socket (rather than a TCP socket.)
+clientSocket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+
+# Server Port chosen arbitrarily
+serverPort = 12000
+clientPort = 13000
+# Buffer size set to 6000 bytes
+buf = 6000
+# The port number 13000 is bound to the client socket.
+clientSocket.bind(('', clientPort))
 
 # "sendButton" click handler
 def onClick():
     # Server name is set to localhost as we are working on one system
     serverName = hostNameView.get()
-    infoNextLable = tk.Label(rootView, text="                    ")
-    infoNextLable.grid(column=0, row=14)
     if serverName == "":
-        infoLabel = tk.Label(rootView, text="Please input a server address before trying to send!!!")
-        infoLabel.grid(column=0, row=12)
+        stateLog.insert(tk.END, "Error: Cannot Send, Invalid Server IPA/Name\n")
     else:
-        infoLabel = tk.Label(rootView, text="Image sent to specified server!")
-        infoLabel.grid(column=0, row=12)
-        infoNextLable = tk.Label(rootView, text="Waiting on server...")
-        infoNextLable.grid(column=0, row=14)
-        # Server Port chosen arbitrarily
-        serverPort = 12000
-        # Buffer size set to 64kB
-        buf = 5000
-
-        # The UDP socket is created.
-        # AF_INET indicates that the underlying network is using IPv4.
-        # SOCK_RAW indicates we are utilizing a custom packet format (to include additional header information)
-        # SOCK_IPPROTO_UPD means it is a UDP socket (rather than a TCP socket.)
-        #clientSocket = socket.socket(socket.AF_INET, socket.SOCK_RAW, socket.IPPROTO_UDP)
-        clientSocket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-
-        # Deleting temporary file if it exists
-        if os.path.exists("temp1.bin"):
-            os.remove("temp1.bin")
-
+        stateLog.insert(tk.END, "Sending image data...\n")
         sequenceNumberInt = 1
         # The variable message is set to the pixel values of image.bmp
         with open("image1.bmp", "rb") as image:
@@ -73,84 +74,36 @@ def onClick():
                 # Convert image into packets of bytes
                 message = image.read(1024)
                 # Generate the checksum (int)
-
-                serverIPA = intIP(serverName)
-                checksumInt = generateChecksum(int.from_bytes(message, byteorder="little"),
-                                               serverIPA, serverPort, sequenceNumberInt, True)
-                value = generateChecksum(int.from_bytes(message, byteorder="little"),
-                                               serverIPA, serverPort, sequenceNumberInt, False)
-                # Change the sequence number into a suitable bytes item for transport
-                sequenceNumber = sequenceNumberInt.to_bytes(2, byteorder="little")
-                # Change the integer checksum into a suitable bytes item for transport
-                checksum = checksumInt.to_bytes(8, byteorder="little")
-                truth = verifyChecksum(value, checksumInt)
-                # print(int.from_bytes(checksum, byteorder="big"))
+                checksumInt = generateChecksum(int.from_bytes(message, byteorder="little"), sequenceNumberInt, True)
+                # Change the sequence number into a suitable bytes item for transport (1x2 bytes long)
+                sequenceNumber = sequenceNumberInt.to_bytes(1, byteorder="little")
+                # Change the integer checksum into a suitable bytes item for transport (4x2 bytes long)
+                checksum = checksumInt.to_bytes(4, byteorder="little")
                 # The packet is then prepared and sent via the client socket
                 data = sequenceNumber + checksum + message
                 clientSocket.sendto(data, (serverName, serverPort))
                 # Break when message ends
                 if message == b'':
+                    stateLog.insert(tk.END, "... Image sent completely\n")
                     break
 
-        final = []
-        # Set flag
-        recieveFile = True
-        while recieveFile:
-            # A new message "modifiedMessage" is received from the server and the server address is saved
-            modifiedMessage, serverAddress = clientSocket.recvfrom(buf)
-            final.append(modifiedMessage)
-            # Check for end of file
-            if (modifiedMessage == b''):
-                recieveFile = False
-
-        # Deleting temporary file if it exists
-        with open('temp1.bin', 'ab+') as file:
-            for n in range(len(final)):
-                file.write(final[n])
-
-        infoNextLable = tk.Label(rootView, text="Server Response Complete!")
-        infoNextLable.grid(column=0, row=14)
-
-        image = Image.open('temp1.bin')
-        image.show()
-
-        clientSocket.close()
-
-# Turn an IPv4 value into a integer value
-def intIP(address):
-    if address == "localhost":
-        address = socket.gethostbyname(socket.gethostname())
-    elif address == socket.gethostname():
-        address = socket.gethostbyname(socket.gethostname())
-    ipa_int = 0
-    for v in range(0, math.ceil(len(address) / 2)):
-        temp = ''.join(format(ord(i), 'b') for i in address[(2 * v): (2 * (v + 1))])
-        ipa_int += int(temp, 2)
-    return ipa_int
-
-# Generate the checksum for the given 1kB chunk of data, and the given IPA, PORT, and SN
-def generateChecksum(data, ipa, port, sn, flag):
-    a = ipa + sn
-    b = port
-    a += b
-    if a > 65536:
-        a -= 65536
-        a += 1
-    a_1 = a
+# Generate the checksum for the given 1kB chunk of data and SN
+def generateChecksum(data, sn, flag):
+    a = sn
     d = bin(data)[2:]
     for x in range(0, 511):
-        temp = a_1
+        temp = a
         try:
-            a_1 += int(d[(16 * x): (15 + (16 * x))], 2)
-            if a_1 > 65536:
-                a_1 -= 65536
-                a_1 += 1
+            a += int(d[(16 * x): (15 + (16 * x))], 2)
+            if a > 65536:
+                a -= 65536
+                a += 1
         except ValueError:
-                a_1 = temp
+                a = temp
     if flag:
-        return int(bin(a_1).translate(str.maketrans("10", "01"))[2:], 2)
+        return int(bin(a).translate(str.maketrans("10", "01"))[2:], 2)
     else:
-        return a_1
+        return a
 
 # Check if two checksums are valid for the given received data
 def verifyChecksum(value, checksum):
@@ -166,3 +119,4 @@ sendButton.grid(column=0, row=10)
 
 # Show the window GUI in the OS of the user
 rootView.mainloop()
+clientSocket.close()
