@@ -8,23 +8,45 @@ from PIL import Image
 import io
 import os
 import tkinter as tk
+from tkinter import scrolledtext
 import multiprocessing
 import signal
-import math
+import queue
+import logging
+
+# Creates a new window interface and labels it
+rootView = tk.Tk()
+rootView.title("Server Package")
+rootView.geometry("525x400")
+
+# Creates a new logger to handle system messages from the multiprocess to the GUI
+logger = logging.getLogger(__name__)
+
+# Creates a top label giving the hostname and IP address of the server
+serverHostname = socket.gethostname()  # acquires hostname of machine used to run server
+hostNameLabel = tk.Label(rootView, text="Server hostname is: " + serverHostname)
+hostNameLabel.grid(column=0, row=0)
+
+serverIP = (socket.gethostbyname(serverHostname))
+IPANameLabel = tk.Label(rootView, text="Server IPA is: " + serverIP)
+IPANameLabel.grid(column=0, row=2)
+
+# Additional instructions to tell the user what to put into the Client Package
+infoLabel = tk.Label(rootView, text="Please enter the HostName or IPA of the above into the 'Client Package'")
+infoLabel.grid(column=0, row=4)
 
 # Class serving as the point for the thread that will do the background work behind the GUI
 class ServerThread(multiprocessing.Process):
-	def __init__(self): # function to initiate the class
+	def __init__(self):  # function to initiate the class
 		multiprocessing.Process.__init__(self)
 
 	def run(self): # the actual run of the background process
 		# The server port and buffer are set to the same as the client
 		serverPort = 12000
-		buf = 5000
+		buf = 6000
 		# The UDP socket is created same as the client.
 		# AF_INET indicates that the underlying network is using IPv4.
 		# SOCK_DGRAM means it is a UDP socket (rather than a TCP socket.)
-		#serverSocket = socket.socket(socket.AF_INET, socket.SOCK_RAW, socket.IPPROTO_UDP)
 		serverSocket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 		# The port number 12000 is bound to the servers socket.
 		serverSocket.bind(('', serverPort))
@@ -42,15 +64,13 @@ class ServerThread(multiprocessing.Process):
 			while receiveFile:
 				# The message is received from the client and the client address is saved
 				output, clientAddress = serverSocket.recvfrom(buf)
-				serverIPA = self.intIP(serverHostname)
+				#self.STATELOG.insert(tk.END, "Receiving image data...\n")
+				packet = self.sortData(output)
 				# Check the output's checksum
-				seq = int.from_bytes(output[0:1], byteorder="little")
-				test = int.from_bytes(output[2:9], byteorder="little")
-				checksum = self.generateChecksum(int.from_bytes(output[10:], byteorder="little"), serverIPA, serverPort,
-												int.from_bytes(output[0:1], byteorder="little"), False)
-				if self.verifyChecksum(int.from_bytes(output[2:9], byteorder="little"), checksum):
-					message.append(output[10:])
-					if output[10:] == b'':
+				checksum = self.generateChecksum(packet["Message_Int"], packet["SN"], False)
+				if self.verifyChecksum(packet["Checksum"], checksum):
+					message.append(packet["Message"])
+					if packet["Message"] == b'':
 						receiveFile = False
 
 			# Write message to a file
@@ -67,49 +87,25 @@ class ServerThread(multiprocessing.Process):
 			imgByteArr = io.BytesIO()
 			# modifiedImage.save(imgByteArr, format='BMP')
 			modifiedImage.save('final.bmp')
-			# the final message is sent to the client
-			with open("final.bmp", "rb") as final:
-				while True:
-					finalMessage = final.read(4096)
-					serverSocket.sendto(finalMessage, clientAddress)
-					if (finalMessage == (b'')):
-						break
-
-	# Turn an IPv4 value into a integer value
-	def intIP(self, address):
-		if address == "localhost":
-			address = socket.gethostbyname(socket.gethostname())
-		elif address == socket.gethostname():
-			address = socket.gethostbyname(socket.gethostname())
-		ipa_int = 0
-		for v in range(0, math.ceil(len(address) / 2)):
-			temp = ''.join(format(ord(i), 'b') for i in address[(2 * v): (2 * (v + 1))])
-			ipa_int += int(temp, 2)
-		return ipa_int
+			#self.STATELOG.insert(tk.END, "... Finished receiving image data successfully\n")
 
 	# Generate the checksum for the given 1kB chunk of data, and the given IPA, PORT, and SN
-	def generateChecksum(self, data, ipa, port, sn, flag):
-		a = ipa + sn
-		b = port
-		a += b
-		if a > 65536:
-			a -= 65536
-			a += 1
-		a_1 = a
+	def generateChecksum(self, data, sn, flag):
+		a = sn
 		d = bin(data)[2:]
 		for x in range(0, 511):
-			temp = a_1
+			temp = a
 			try:
-				a_1 += int(d[(16 * x): (15 + (16 * x))], 2)
-				if a_1 > 65536:
-					a_1 -= 65536
-					a_1 += 1
+				a += int(d[(16 * x): (15 + (16 * x))], 2)
+				if a > 65536:
+					a -= 65536
+					a += 1
 			except ValueError:
-				a_1 = temp
+				a = temp
 		if flag:
-			return int(bin(a_1).translate(str.maketrans("10", "01"))[2:], 2)
+			return int(bin(a).translate(str.maketrans("10", "01"))[2:], 2)
 		else:
-			return a_1
+			return a
 
 	# Check if two checksums are valid for the given received data
 	def verifyChecksum(self, value, checksum):
@@ -119,26 +115,18 @@ class ServerThread(multiprocessing.Process):
 			return True
 		return False
 
-	def kill(self): # Function definition to kill the running process in a multiprocessing situation
+	# Sort the incoming data into its component forms, and return a dictionary of this information
+	def sortData(self, data):
+		dictionary = {}
+		dictionary["SN"] = data[0]  # sequence number leads the data received (1x2 bytes long)
+		dictionary["Checksum"] = int.from_bytes(data[1:4], byteorder="little")  # the checksum is before the message data received (4x2 bytes long)
+		dictionary["Message"] = data[5:]  # message data received (1024 bytes long)
+		dictionary["Message_Int"] = int.from_bytes(data[5:], byteorder="little")  # converted message data into an integer
+		return dictionary
+
+	def kill(self):  # Function definition to kill the running process in a multiprocessing situation
 		os.kill(self.pid, signal.SIGABRT)
 
-# Creates a new window interface and labels it
-rootView = tk.Tk()
-rootView.title("Server Package")
-rootView.geometry("400x400")
-
-# Creates a top label giving the hostname and IP address of the server
-serverHostname = socket.gethostname()  # acquires hostname of machine used to run server
-hostNameLabel = tk.Label(rootView, text="Server hostname is: " + serverHostname)
-hostNameLabel.grid(column=0, row=0)
-
-serverIP = (socket.gethostbyname(serverHostname))
-IPANameLabel = tk.Label(rootView, text="Server IPA is: " + serverIP)
-IPANameLabel.grid(column=0, row=2)
-
-# Additional instructions to tell the user what to put into the Client Package
-infoLabel = tk.Label(rootView, text="Please enter the HostName or IPA of the above into the 'Client Package'")
-infoLabel.grid(column=0, row=4)
 
 # Start multiprocessing the background activity of the server application
 process = ServerThread()

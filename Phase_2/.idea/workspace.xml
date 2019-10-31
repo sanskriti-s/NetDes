@@ -2,18 +2,12 @@
 <project version="4">
   <component name="ChangeListManager">
     <list default="true" id="c66b59bc-7a4f-41bf-9b01-188e9c189548" name="Default Changelist" comment="">
-      <change afterPath="$PROJECT_DIR$/../John - Phase 1/Basic UDP Client Server/.idea/workspace.xml" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/Test.py" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/Test01.py" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/Test01.txt" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/final.bmp" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/python3.6-sudo.sh" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/temp.bin" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/temp1.bin" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/../Sanskriti - Phase 1/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/Test01.py" beforeDir="false" afterPath="$PROJECT_DIR$/Test01.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/UDPClient.py" beforeDir="false" afterPath="$PROJECT_DIR$/UDPClient.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/UDPServer.py" beforeDir="false" afterPath="$PROJECT_DIR$/UDPServer.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/temp.bin" beforeDir="false" afterPath="$PROJECT_DIR$/temp.bin" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/temp1.bin" beforeDir="false" />
     </list>
     <option name="EXCLUDED_CONVERTED_TO_IGNORED" value="true" />
     <option name="SHOW_DIALOG" value="false" />
@@ -155,6 +149,14 @@
       <option name="presentableId" value="Default" />
       <updated>1570390107477</updated>
     </task>
+    <task id="LOCAL-00001" summary="Current client and server model (uncleaned), that sends alternating sequence numbers, with checksum and message data utilizing a bytes object. Verifies checksum. GUI and cleanup to follow for next commit.">
+      <created>1572490818085</created>
+      <option name="number" value="00001" />
+      <option name="presentableId" value="LOCAL-00001" />
+      <option name="project" value="LOCAL" />
+      <updated>1572490818085</updated>
+    </task>
+    <option name="localTasksCounter" value="2" />
     <servers />
   </component>
   <component name="Vcs.Log.Tabs.Properties">
@@ -172,5 +174,7 @@
   </component>
   <component name="VcsManagerConfiguration">
     <option name="ADD_EXTERNAL_FILES_SILENTLY" value="true" />
+    <MESSAGE value="Current client and server model (uncleaned), that sends alternating sequence numbers, with checksum and message data utilizing a bytes object. Verifies checksum. GUI and cleanup to follow for next commit." />
+    <option name="LAST_COMMIT_MESSAGE" value="Current client and server model (uncleaned), that sends alternating sequence numbers, with checksum and message data utilizing a bytes object. Verifies checksum. GUI and cleanup to follow for next commit." />
   </component>
 </project>
