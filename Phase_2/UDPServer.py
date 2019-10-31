@@ -10,6 +10,7 @@ import os
 import tkinter as tk
 import multiprocessing
 import signal
+import math
 
 # Class serving as the point for the thread that will do the background work behind the GUI
 class ServerThread(multiprocessing.Process):
@@ -23,6 +24,7 @@ class ServerThread(multiprocessing.Process):
 		# The UDP socket is created same as the client.
 		# AF_INET indicates that the underlying network is using IPv4.
 		# SOCK_DGRAM means it is a UDP socket (rather than a TCP socket.)
+		#serverSocket = socket.socket(socket.AF_INET, socket.SOCK_RAW, socket.IPPROTO_UDP)
 		serverSocket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 		# The port number 12000 is bound to the servers socket.
 		serverSocket.bind(('', serverPort))
@@ -38,11 +40,18 @@ class ServerThread(multiprocessing.Process):
 		while True:
 			receiveFile = True
 			while receiveFile:
-				# The message is recieved from the client and the client address is saved
+				# The message is received from the client and the client address is saved
 				output, clientAddress = serverSocket.recvfrom(buf)
-				message.append(output)
-				if (output == b''):
-					receiveFile = False
+				serverIPA = self.intIP(serverHostname)
+				# Check the output's checksum
+				seq = int.from_bytes(output[0:1], byteorder="little")
+				test = int.from_bytes(output[2:9], byteorder="little")
+				checksum = self.generateChecksum(int.from_bytes(output[10:], byteorder="little"), serverIPA, serverPort,
+												int.from_bytes(output[0:1], byteorder="little"), False)
+				if self.verifyChecksum(int.from_bytes(output[2:9], byteorder="little"), checksum):
+					message.append(output[10:])
+					if output[10:] == b'':
+						receiveFile = False
 
 			# Write message to a file
 			with open('temp.bin', 'ab+') as file:
@@ -65,6 +74,50 @@ class ServerThread(multiprocessing.Process):
 					serverSocket.sendto(finalMessage, clientAddress)
 					if (finalMessage == (b'')):
 						break
+
+	# Turn an IPv4 value into a integer value
+	def intIP(self, address):
+		if address == "localhost":
+			address = socket.gethostbyname(socket.gethostname())
+		elif address == socket.gethostname():
+			address = socket.gethostbyname(socket.gethostname())
+		ipa_int = 0
+		for v in range(0, math.ceil(len(address) / 2)):
+			temp = ''.join(format(ord(i), 'b') for i in address[(2 * v): (2 * (v + 1))])
+			ipa_int += int(temp, 2)
+		return ipa_int
+
+	# Generate the checksum for the given 1kB chunk of data, and the given IPA, PORT, and SN
+	def generateChecksum(self, data, ipa, port, sn, flag):
+		a = ipa + sn
+		b = port
+		a += b
+		if a > 65536:
+			a -= 65536
+			a += 1
+		a_1 = a
+		d = bin(data)[2:]
+		for x in range(0, 511):
+			temp = a_1
+			try:
+				a_1 += int(d[(16 * x): (15 + (16 * x))], 2)
+				if a_1 > 65536:
+					a_1 -= 65536
+					a_1 += 1
+			except ValueError:
+				a_1 = temp
+		if flag:
+			return int(bin(a_1).translate(str.maketrans("10", "01"))[2:], 2)
+		else:
+			return a_1
+
+	# Check if two checksums are valid for the given received data
+	def verifyChecksum(self, value, checksum):
+		verify = bin(value ^ checksum)
+		checker = (2 ** (len(verify) - 2)) - 1
+		if int(verify, 2) == checker:
+			return True
+		return False
 
 	def kill(self): # Function definition to kill the running process in a multiprocessing situation
 		os.kill(self.pid, signal.SIGABRT)
