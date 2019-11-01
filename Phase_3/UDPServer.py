@@ -41,6 +41,7 @@ imageLabel = tk.Label(rootView, image=imageObject)
 imageLabel.grid(column=0, row=8)
 imageCollection = b""
 
+
 # Function serving as the point for the thread that will do the background work behind the GUI
 def serverActivity(connection, relay):
     mailBox = connection
@@ -57,11 +58,9 @@ def serverActivity(connection, relay):
     # The port number 12000 is bound to the servers socket.
     serverSocket.bind(('', serverPort))
 
-    # Deleting end-transfer files, if they exist
+    # Deleting end-of-transfer saved files, if they exist
     if os.path.exists("final.bmp"):
         os.remove("final.bmp")
-    if os.path.exists("updatingImage.bmp"):
-        os.remove("updatingImage.bmp")
 
     message = b""
     ack = "ACK".encode("UTF-8")
@@ -168,18 +167,17 @@ def sequenceSwitch(value):
 def collectUpdate():
     global imageCollection
     global imageObject
-    while not queue.empty():
-        stateLog.insert(tk.END, queue.get())
-        stateLog.yview(tk.END)
-    while not imageQueue.empty():
-        imageCollection += imageQueue.get()
-        try:
-            imageObject = Image.open(io.BytesIO(imageCollection))
-            imageObject.save("updatingImage.bmp")
-            imageObject = ImageTk.PhotoImage(Image.open("updatingImage.bmp"))
-            imageLabel.config(image=imageObject)
-        except OSError:
-            pass
+    while (not queue.empty()) or (not imageQueue.empty()):
+        if not queue.empty():
+            stateLog.insert(tk.END, queue.get())
+            stateLog.yview(tk.END)
+        if not imageQueue.empty():
+            imageCollection += imageQueue.get()
+            try:
+                imageObject = ImageTk.PhotoImage(Image.open(io.BytesIO(imageCollection)))
+                imageLabel.config(image=imageObject)
+            except OSError:
+                pass
     # Look for updates continuously from the other process (after 100ms) [this type of callback prevents recursion]
     rootView.after(100, collectUpdate)
 
@@ -197,5 +195,5 @@ rootView.after(100, collectUpdate())
 # Show the window GUI in the OS of the user
 rootView.mainloop()
 
-# Kill the additional process running in the background
+# Kill the additional processes running in the background
 os.kill(process.pid, signal.SIGABRT)

@@ -6,6 +6,9 @@
 import socket
 import tkinter as tk
 from tkinter import scrolledtext
+import os
+import signal
+import multiprocessing
 
 # Creates a new window interface and labels it
 rootView = tk.Tk()
@@ -41,19 +44,65 @@ stateLog = scrolledtext.ScrolledText(rootView, width=60, height=10)
 stateLog.grid(column=0, row=20)
 stateLog.insert(tk.END, "Client State Log:\n")
 
-# The UDP socket is created.
-# The UDP socket is created same as the client.
-# AF_INET indicates that the underlying network is using IPv4.
-# SOCK_DGRAM means it is a UDP socket (rather than a TCP socket.)
-clientSocket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-# Server Port chosen arbitrarily
-serverPort = 12000
-# Buffer size set to 6000 bytes
-buf = 6000
+queue = multiprocessing.Queue()
+process = 0
+
+
+# Function serving as the point for the thread that will do the background work behind the GUI
+def clientActivity(connection, name):
+    mailBox = connection
+    # The UDP socket is created.
+    # The UDP socket is created same as the client.
+    # AF_INET indicates that the underlying network is using IPv4.
+    # SOCK_DGRAM means it is a UDP socket (rather than a TCP socket.)
+    clientSocket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    # Server Port chosen arbitrarily
+    serverPort = 12000
+    # Buffer size set to 6000 bytes
+    buf = 6000
+    mailBox.put("Beginning to send image data...\n")
+    sequenceNumberInt = 0
+    # The variable message is set to the pixel values of image.bmp
+    with open("image.bmp", "rb") as image:
+        clientMap = True
+        while clientMap:
+            mailBox.put("State " + str(sequenceNumberInt) + ": Waiting for call above\n")
+            stateMap = True
+            # Parse though the image data to gather a message of only 1024 bytes
+            message = image.read(1024)
+            # Generate the checksum (int)
+            checksumInt = generateChecksum(int.from_bytes(message, byteorder="little"), sequenceNumberInt, True)
+            # Change the sequence number into a suitable bytes item for transport (1x2 bytes long)
+            sequenceNumber = sequenceNumberInt.to_bytes(1, byteorder="little")
+            # Change the integer checksum into a suitable bytes item for transport (4x2 bytes long)
+            checksum = checksumInt.to_bytes(4, byteorder="little")
+            # The packet is then prepared and sent via the client socket
+            data = sequenceNumber + checksum + message
+            while stateMap:
+                clientSocket.sendto(data, (name, serverPort))
+                mailBox.put("State " + str(sequenceNumberInt) + ": Waiting for ACK " +
+                            str(sequenceNumberInt) + "\n")
+                output, serverAddress = clientSocket.recvfrom(buf)
+                packet = sortData(output)
+                # State Switcher 0->1->0
+                if packet["SN"] == sequenceNumberInt:  # Does this ACK carry the proper SN?
+                    ackChecksum = generateChecksum(packet["ACK_Int"], packet["SN"], False)
+                    if verifyChecksum(packet["Checksum"], ackChecksum):  # Is the checksum valid?
+                        # Go on an send the next packet of data
+                        stateMap = False
+                        # Break when message ends
+                        if message == b'':
+                            mailBox.put("... Image finished sending\n")
+                            clientMap = False
+                        sequenceNumberInt = sequenceSwitch(sequenceNumberInt)
+                        # If all fail, then send the packet of data again, nothing in the sequence advances forward
+        clientSocket.close()
+
 
 # "sendButton" click handler
 def onClick():
     global sendButton
+    global process
     sendButton.configure(state=tk.DISABLED)
     # Server name is set to localhost as we are working on one system
     serverName = hostNameView.get()
@@ -61,49 +110,9 @@ def onClick():
         stateLog.insert(tk.END, "Error: Cannot Send, Invalid Server IPA/Name\n")
         stateLog.yview(tk.END)
     else:
-        stateLog.insert(tk.END, "Beginning to send image data...\n")
-        stateLog.yview(tk.END)
-        sequenceNumberInt = 0
-        # The variable message is set to the pixel values of image.bmp
-        with open("image1.bmp", "rb") as image:
-            currentPacket = 0
-            sendingMap = True
-            while sendingMap:
-                stateLog.insert(tk.END, "State " + str(sequenceNumberInt) + ": Waiting for call above\n")
-                stateLog.yview(tk.END)
-                stateMap = True
-                # Parse though the image data to gather a message of only 1024 bytes
-                message = image.read(1024)
-                # Generate the checksum (int)
-                checksumInt = generateChecksum(int.from_bytes(message, byteorder="little"), sequenceNumberInt, True)
-                # Change the sequence number into a suitable bytes item for transport (1x2 bytes long)
-                sequenceNumber = sequenceNumberInt.to_bytes(1, byteorder="little")
-                # Change the integer checksum into a suitable bytes item for transport (4x2 bytes long)
-                checksum = checksumInt.to_bytes(4, byteorder="little")
-                # The packet is then prepared and sent via the client socket
-                data = sequenceNumber + checksum + message
-                while stateMap:
-                    clientSocket.sendto(data, (serverName, serverPort))
-                    stateLog.insert(tk.END, "State " + str(sequenceNumberInt) + ": Waiting for ACK " +
-                                    str(sequenceNumberInt) + "\n")
-                    stateLog.yview(tk.END)
-                    output, serverAddress = clientSocket.recvfrom(buf)
-                    packet = sortData(output)
-                    # State Switcher 0->1->0
-                    if packet["SN"] == sequenceNumberInt:  # Does this ACK carry the proper SN?
-                        ackChecksum = generateChecksum(packet["ACK_Int"], packet["SN"], False)
-                        if verifyChecksum(packet["Checksum"], ackChecksum):  # Is the checksum valid?
-                            # Go on an send the next packet of data
-                            stateMap = False
-                            currentPacket += 1
-                            # Break when message ends
-                            if message == b'':
-                                stateLog.insert(tk.END, "... Image finished sending\n")
-                                stateLog.yview(tk.END)
-                                sendingMap = False
-                            sequenceNumberInt = sequenceSwitch(sequenceNumberInt)
-                            # If all fail, then send the packet of data again, nothing in the sequence advances forward
-    sendButton.configure(state=tk.ACTIVE)
+        # Start multiprocessing the background activity of the server application
+        process = multiprocessing.Process(target=clientActivity, args=(queue, serverName))
+        process.start()
 
 
 # Generate the checksum for the given 1kB chunk of data and SN
@@ -155,10 +164,25 @@ def sequenceSwitch(value):
     return value
 
 
+# Checks if there is a message in the queue to update the GUI with for the action log or picture updater
+def collectUpdate():
+    global process
+    while not queue.empty():
+        info = queue.get()
+        stateLog.insert(tk.END, info)
+        stateLog.yview(tk.END)
+        if info == "... Image finished sending\n":
+            sendButton.configure(state=tk.ACTIVE)
+            process = 0
+    rootView.after(100, collectUpdate)
+
 # Creates a button to initiate the send and to show sending info
 sendButton = tk.Button(rootView, text="Send Image", command=onClick)
 sendButton.grid(column=0, row=8)
 
+rootView.after(100, collectUpdate())
 # Show the window GUI in the OS of the user
 rootView.mainloop()
-clientSocket.close()
+
+if not process == 0:
+    os.kill(process.pid, signal.SIGABRT)
