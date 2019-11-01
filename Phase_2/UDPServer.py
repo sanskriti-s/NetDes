@@ -4,7 +4,7 @@
 
 #import the socket, pillow, io, os, tkinter, multiprocessing and signal modules
 import socket
-from PIL import Image
+from PIL import ImageTk, Image
 import io
 import os
 import tkinter as tk
@@ -15,7 +15,7 @@ import signal
 # Creates a new window interface and labels it
 rootView = tk.Tk()
 rootView.title("Server Package")
-rootView.geometry("525x400")
+rootView.geometry("675x800")
 
 # Creates a top label giving the hostname and IP address of the server
 serverHostname = socket.gethostname()  # acquires hostname of machine used to run server
@@ -35,10 +35,18 @@ stateLog = scrolledtext.ScrolledText(rootView, width=60, height=10)
 stateLog.grid(column=0, row=6)
 stateLog.insert(tk.END, "Server State Log:\n")
 
+# Creates an image label in the window to show as the image is loaded in the GUI
+imageObject = ImageTk.PhotoImage(Image.open("Mamemon.jpeg"))
+imageLabel = tk.Label(rootView, image=imageObject)
+imageLabel.grid(column=0, row=8)
+imageCollection = b""
 
 # Function serving as the point for the thread that will do the background work behind the GUI
-def serverActivity(connection):
-    QUEUE = connection
+def serverActivity(connection, relay):
+    mailBox = connection
+    pictureBox = relay
+    global imageCollection
+    imageCollection = b""
     # The server port and buffer are set to the same as the client
     serverPort = 12000
     buf = 6000
@@ -49,45 +57,62 @@ def serverActivity(connection):
     # The port number 12000 is bound to the servers socket.
     serverSocket.bind(('', serverPort))
 
-    # Deleting temporary files if they exists
-    if os.path.exists("temp.bin"):
-        os.remove("temp.bin")
+    # Deleting end-transfer files, if they exist
     if os.path.exists("final.bmp"):
         os.remove("final.bmp")
+    if os.path.exists("updatingImage.bmp"):
+        os.remove("updatingImage.bmp")
 
-    message = []
+    message = b""
+    ack = "ACK".encode("UTF-8")
     # Enters an indefinite loop
     while True:
-        QUEUE.put("Prepared to receive image data...\n")
+        mailBox.put("Prepared to receive image data...\n")
+        expectedSequence = 0
         receiveFile = True
         while receiveFile:
             # The message is received from the client and the client address is saved
+            mailBox.put("State " + str(expectedSequence) + ": Waiting for call below\n")
             output, clientAddress = serverSocket.recvfrom(buf)
             packet = sortData(output)
-            # Check the output's checksum
-            checksum = generateChecksum(packet["Message_Int"], packet["SN"], False)
-            if verifyChecksum(packet["Checksum"], checksum):
-                message.append(packet["Message"])
-                if packet["Message"] == b'':
-                    receiveFile = False
+            # State Switcher 0->1->0
+            if packet["SN"] == expectedSequence:  # Is the SN the expected value?
+                # Check the output's checksum
+                checksum = generateChecksum(packet["Message_Int"], packet["SN"], False)
+                if verifyChecksum(packet["Checksum"], checksum):  # Does the checksum match up?
+                    message += packet["Message"]  # Send the data up to the application level
+                    pictureBox.put(packet["Message"])
+                    # Send an ACK that indicates that data was properly received
+                    ackCheckInt = generateChecksum(int.from_bytes(ack, byteorder="little"), expectedSequence, True)
+                    ackChecksum = ackCheckInt.to_bytes(4, byteorder="little")
+                    switchback = packet["SN"].to_bytes(1, byteorder="little") + ackChecksum + ack
+                    serverSocket.sendto(switchback, clientAddress)
+                    if packet["Message"] == b'':
+                        receiveFile = False
+                else:  # If the checksum does not match up, send an ACK asking for the data again
+                    expectedSequence = sequenceSwitch(expectedSequence)
+                    ackCheckInt = generateChecksum(int.from_bytes(ack, byteorder="little"), expectedSequence, True)
+                    ackChecksum = ackCheckInt.to_bytes(4, byteorder="little")
+                    switchback = int.to_bytes(1, packet["SN"]) + ackChecksum + ack
+                    serverSocket.sendto(switchback, clientAddress)
+            else:  # If the SN is incorrect, send an ACK asking for the data again
+                expectedSequence = sequenceSwitch(expectedSequence)
+                ackCheckInt = generateChecksum(int.from_bytes(ack, byteorder="little"), expectedSequence, True)
+                ackChecksum = ackCheckInt.to_bytes(4, byteorder="little")
+                switchback = int.to_bytes(1, packet["SN"]) + ackChecksum + ack
+                serverSocket.sendto(switchback, clientAddress)
+            expectedSequence = sequenceSwitch(expectedSequence)
 
-        # Write message to a file
-        with open('temp.bin', 'ab+') as file:
-            for n in range(len(message)):
-                file.write(message[n])
-
-        image = Image.open("temp.bin")
+        # Show the image file
+        image = Image.open(io.BytesIO(message))
         try:
-            image.show()
-            QUEUE.put("... Finished image transfer successfully\n")
+            mailBox.put("... Finished image transfer successfully\n")
             # The image is converted to greyscale and saved to modifiedImage
             modifiedImage = image.convert('L')
             # The pixel values of the image are converted into a byte array
-            imgByteArr = io.BytesIO()
-            # modifiedImage.save(imgByteArr, format='BMP')
             modifiedImage.save('final.bmp')
         except OSError:
-            QUEUE.put("Error: Image transfer corrupted\n")
+            mailBox.put("Error: Image transfer corrupted\n")
 
 
 # Generate the checksum for the given 1kB chunk of data, and the given IPA, PORT, and SN
@@ -129,17 +154,40 @@ def sortData(data):
     return dictionary
 
 
+# Simple function call to switch the value of the SN
+def sequenceSwitch(value):
+    # Swap the sequence number between each case
+    if value == 1:
+        value = 0
+    else:
+        value = 1
+    return value
+
+
+# Checks if there is a message in the queue to update the GUI with for the action log or picture updater
 def collectUpdate():
+    global imageCollection
+    global imageObject
     while not queue.empty():
         stateLog.insert(tk.END, queue.get())
         stateLog.yview(tk.END)
-    # Look for updates continuously from the other process (after 100ms) [prevents recursion]
+    while not imageQueue.empty():
+        imageCollection += imageQueue.get()
+        try:
+            imageObject = Image.open(io.BytesIO(imageCollection))
+            imageObject.save("updatingImage.bmp")
+            imageObject = ImageTk.PhotoImage(Image.open("updatingImage.bmp"))
+            imageLabel.config(image=imageObject)
+        except OSError:
+            pass
+    # Look for updates continuously from the other process (after 100ms) [this type of callback prevents recursion]
     rootView.after(100, collectUpdate)
 
 
 # Start multiprocessing the background activity of the server application
 queue = multiprocessing.Queue()
-process = multiprocessing.Process(target=serverActivity, args=(queue,))
+imageQueue = multiprocessing.Queue()
+process = multiprocessing.Process(target=serverActivity, args=(queue, imageQueue,))
 if __name__ == '__main__':
     process.start()
 

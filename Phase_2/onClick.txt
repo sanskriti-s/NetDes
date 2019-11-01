@@ -1,0 +1,31 @@
+# "sendButton" click handler
+def onClick():
+    # Server name is set to localhost as we are working on one system
+    serverName = hostNameView.get()
+    if serverName == "":
+        stateLog.insert(tk.END, "Error: Cannot Send, Invalid Server IPA/Name\n")
+        stateLog.yview(tk.END)
+    else:
+        stateLog.insert(tk.END, "Sending image data...\n")
+        stateLog.yview(tk.END)
+        sequenceNumberInt = 0
+        # The variable message is set to the pixel values of image.bmp
+        with open("image1.bmp", "rb") as image:
+            while True:
+                # Convert image into packets of bytes
+                message = image.read(1024)
+                # Generate the checksum (int)
+                checksumInt = generateChecksum(int.from_bytes(message, byteorder="little"), sequenceNumberInt, True)
+                # Change the sequence number into a suitable bytes item for transport (1x2 bytes long)
+                sequenceNumber = sequenceNumberInt.to_bytes(1, byteorder="little")
+                # Change the integer checksum into a suitable bytes item for transport (4x2 bytes long)
+                checksum = checksumInt.to_bytes(4, byteorder="little")
+                # The packet is then prepared and sent via the client socket
+                data = sequenceNumber + checksum + message
+                clientSocket.sendto(data, (serverName, serverPort))
+                # Break when message ends
+                if message == b'':
+                    stateLog.insert(tk.END, "... Image finished sending\n")
+                    stateLog.yview(tk.END)
+                    break
+                sequenceNumberInt = sequenceSwitch(sequenceNumberInt)
