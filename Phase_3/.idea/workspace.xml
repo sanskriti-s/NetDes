@@ -2,28 +2,9 @@
 <project version="4">
   <component name="ChangeListManager">
     <list default="true" id="c66b59bc-7a4f-41bf-9b01-188e9c189548" name="Default Changelist" comment="">
-      <change afterPath="$PROJECT_DIR$/.idea/modules.xml" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/final.bmp" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/image.bmp" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/image.jpg" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/../Phase_2/.idea/Phase_2.iml" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/../Phase_2/.idea/inspectionProfiles/profiles_settings.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/inspectionProfiles/profiles_settings.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/../Phase_2/.idea/misc.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/misc.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/../Phase_2/.idea/modules.xml" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/../Phase_2/.idea/vcs.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/vcs.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/../Phase_2/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/../Phase_2/Mamemon.jpeg" beforeDir="false" afterPath="$PROJECT_DIR$/Mamemon.jpeg" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/../Phase_2/ServerThread.txt" beforeDir="false" afterPath="$PROJECT_DIR$/ServerThread.txt" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/../Phase_2/Test.py" beforeDir="false" afterPath="$PROJECT_DIR$/Test.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/../Phase_2/Test01.py" beforeDir="false" afterPath="$PROJECT_DIR$/Test01.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/../Phase_2/Test01.txt" beforeDir="false" afterPath="$PROJECT_DIR$/Test01.txt" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/../Phase_2/UDPClient.py" beforeDir="false" afterPath="$PROJECT_DIR$/UDPClient.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/../Phase_2/UDPServer.py" beforeDir="false" afterPath="$PROJECT_DIR$/UDPServer.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/../Phase_2/final.bmp" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/../Phase_2/image1.bmp" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/../Phase_2/onClick.txt" beforeDir="false" afterPath="$PROJECT_DIR$/onClick.txt" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/../Phase_2/python3.6-sudo.sh" beforeDir="false" afterPath="$PROJECT_DIR$/python3.6-sudo.sh" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/../Phase_2/updatingImage.bmp" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/UDPClient.py" beforeDir="false" afterPath="$PROJECT_DIR$/UDPClient.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/UDPServer.py" beforeDir="false" afterPath="$PROJECT_DIR$/UDPServer.py" afterDir="false" />
     </list>
     <option name="EXCLUDED_CONVERTED_TO_IGNORED" value="true" />
     <option name="SHOW_DIALOG" value="false" />
@@ -239,7 +220,14 @@
       <option name="project" value="LOCAL" />
       <updated>1572591532150</updated>
     </task>
-    <option name="localTasksCounter" value="5" />
+    <task id="LOCAL-00005" summary="Client and Server successfully running on their own processes (separate from the initial GUI packages).&#10;Successful showing of image transfer and states in approximately real time (minor delay due to queuing processing between child process and its parent).&#10;Notice: Timing and Error still need to be tested and injected into the system, but the GUI already supports this feature.">
+      <created>1572617030692</created>
+      <option name="number" value="00005" />
+      <option name="presentableId" value="LOCAL-00005" />
+      <option name="project" value="LOCAL" />
+      <updated>1572617030692</updated>
+    </task>
+    <option name="localTasksCounter" value="6" />
     <servers />
   </component>
   <component name="Vcs.Log.Tabs.Properties">
@@ -261,6 +249,7 @@
     <MESSAGE value="Current client and server cleaned code, with state logger.&#10;NOTE: State logger does not respond yet on the server due to multithreading component. To be fixed in future versions." />
     <MESSAGE value="State logger works with reworked server set-up." />
     <MESSAGE value="Client and Server states are now built into their respective packages.&#10;Notice: Showing an image during transfer appears to have issues... we'll see if we can get that up and running. Otherwise, only error and timing need to be implemented left" />
-    <option name="LAST_COMMIT_MESSAGE" value="Client and Server states are now built into their respective packages.&#10;Notice: Showing an image during transfer appears to have issues... we'll see if we can get that up and running. Otherwise, only error and timing need to be implemented left" />
+    <MESSAGE value="Client and Server successfully running on their own processes (separate from the initial GUI packages).&#10;Successful showing of image transfer and states in approximately real time (minor delay due to queuing processing between child process and its parent).&#10;Notice: Timing and Error still need to be tested and injected into the system, but the GUI already supports this feature." />
+    <option name="LAST_COMMIT_MESSAGE" value="Client and Server successfully running on their own processes (separate from the initial GUI packages).&#10;Successful showing of image transfer and states in approximately real time (minor delay due to queuing processing between child process and its parent).&#10;Notice: Timing and Error still need to be tested and injected into the system, but the GUI already supports this feature." />
   </component>
 </project>

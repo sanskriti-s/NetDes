@@ -9,6 +9,7 @@ from tkinter import scrolledtext
 import os
 import signal
 import multiprocessing
+import random
 
 # Creates a new window interface and labels it
 rootView = tk.Tk()
@@ -32,7 +33,7 @@ hostNameView.focus()
 # Creates labels and a spin object to choose the error level in the GUI
 spinnerLabel = tk.Label(rootView, text="Choose error percentage below:")
 spinnerLabel.grid(column=0, row=12)
-errorSpinner = tk.Spinbox(rootView, from_=0, to=100, width=5)
+errorSpinner = tk.Spinbox(rootView, from_=0, to=99, width=5)
 errorSpinner.grid(column=0, row=14)
 
 # Creates a hint label that helps out the user
@@ -49,7 +50,7 @@ process = 0
 
 
 # Function serving as the point for the thread that will do the background work behind the GUI
-def clientActivity(connection, name):
+def clientActivity(connection, name, errorPercentage):
     mailBox = connection
     # The UDP socket is created.
     # The UDP socket is created same as the client.
@@ -66,7 +67,7 @@ def clientActivity(connection, name):
     with open("image.bmp", "rb") as image:
         clientMap = True
         while clientMap:
-            mailBox.put("State " + str(sequenceNumberInt) + ": Waiting for call above\n")
+            mailBox.put("State " + str(sequenceNumberInt) + ": Sending\n")
             stateMap = True
             # Parse though the image data to gather a message of only 1024 bytes
             message = image.read(1024)
@@ -76,14 +77,19 @@ def clientActivity(connection, name):
             sequenceNumber = sequenceNumberInt.to_bytes(1, byteorder="little")
             # Change the integer checksum into a suitable bytes item for transport (4x2 bytes long)
             checksum = checksumInt.to_bytes(4, byteorder="little")
-            # The packet is then prepared and sent via the client socket
-            data = sequenceNumber + checksum + message
             while stateMap:
+                # Inject error into the outgoing message to the server
+                messageModed = injectError(message, errorPercentage)
+                # The packet is then prepared and sent via the client socket
+                data = sequenceNumber + checksum + messageModed
                 clientSocket.sendto(data, (name, serverPort))
                 mailBox.put("State " + str(sequenceNumberInt) + ": Waiting for ACK " +
                             str(sequenceNumberInt) + "\n")
                 output, serverAddress = clientSocket.recvfrom(buf)
                 packet = sortData(output)
+                # Inject error into the incoming ACK
+                packet["ACK"] = injectError(packet["ACK"], errorPercentage)
+                packet["ACK_Int"] = int.from_bytes(packet["ACK"], byteorder="little")  # converted ACK into an integer
                 # State Switcher 0->1->0
                 if packet["SN"] == sequenceNumberInt:  # Does this ACK carry the proper SN?
                     ackChecksum = generateChecksum(packet["ACK_Int"], packet["SN"], False)
@@ -111,7 +117,7 @@ def onClick():
         stateLog.yview(tk.END)
     else:
         # Start multiprocessing the background activity of the server application
-        process = multiprocessing.Process(target=clientActivity, args=(queue, serverName))
+        process = multiprocessing.Process(target=clientActivity, args=(queue, serverName, int(errorSpinner.get())))
         process.start()
 
 
@@ -150,7 +156,6 @@ def sortData(data):
     dictionary["Checksum"] = int.from_bytes(data[1:4], byteorder="little")  # the checksum is before the message data
     # received (4x2 bytes long)
     dictionary["ACK"] = data[5:]  # message data received (1024 bytes long)
-    dictionary["ACK_Int"] = int.from_bytes(data[5:], byteorder="little")  # converted ACK into an integer
     return dictionary
 
 
@@ -163,6 +168,17 @@ def sequenceSwitch(value):
         value = 1
     return value
 
+# A simple function call that injects data bit error and Ack error into the system intentially
+def injectError(information, error):
+    while error > 100:
+        error -= 100
+    randomInt = random.randrange(1, 100)
+    if randomInt < error:
+        injection = int.from_bytes(information, byteorder="little")
+        injection = bin(injection)
+        injection = int(injection.translate(str.maketrans("10", "01"))[2:], 2)
+        information = injection.to_bytes(len(information), byteorder="little")
+    return information
 
 # Checks if there is a message in the queue to update the GUI with for the action log or picture updater
 def collectUpdate():

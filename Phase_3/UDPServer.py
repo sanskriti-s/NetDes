@@ -46,8 +46,6 @@ imageCollection = b""
 def serverActivity(connection, relay):
     mailBox = connection
     pictureBox = relay
-    global imageCollection
-    imageCollection = b""
     # The server port and buffer are set to the same as the client
     serverPort = 12000
     buf = 6000
@@ -71,7 +69,7 @@ def serverActivity(connection, relay):
         receiveFile = True
         while receiveFile:
             # The message is received from the client and the client address is saved
-            mailBox.put("State " + str(expectedSequence) + ": Waiting for call below\n")
+            mailBox.put("State " + str(expectedSequence) + ": Receiving\n")
             output, clientAddress = serverSocket.recvfrom(buf)
             packet = sortData(output)
             # State Switcher 0->1->0
@@ -92,13 +90,13 @@ def serverActivity(connection, relay):
                     expectedSequence = sequenceSwitch(expectedSequence)
                     ackCheckInt = generateChecksum(int.from_bytes(ack, byteorder="little"), expectedSequence, True)
                     ackChecksum = ackCheckInt.to_bytes(4, byteorder="little")
-                    switchback = int.to_bytes(1, packet["SN"]) + ackChecksum + ack
+                    switchback = packet["SN"].to_bytes(1, byteorder="little") + ackChecksum + ack
                     serverSocket.sendto(switchback, clientAddress)
             else:  # If the SN is incorrect, send an ACK asking for the data again
                 expectedSequence = sequenceSwitch(expectedSequence)
                 ackCheckInt = generateChecksum(int.from_bytes(ack, byteorder="little"), expectedSequence, True)
                 ackChecksum = ackCheckInt.to_bytes(4, byteorder="little")
-                switchback = int.to_bytes(1, packet["SN"]) + ackChecksum + ack
+                switchback = packet["SN"].to_bytes(1, byteorder="little") + ackChecksum + ack
                 serverSocket.sendto(switchback, clientAddress)
             expectedSequence = sequenceSwitch(expectedSequence)
 
@@ -172,12 +170,15 @@ def collectUpdate():
             stateLog.insert(tk.END, queue.get())
             stateLog.yview(tk.END)
         if not imageQueue.empty():
-            imageCollection += imageQueue.get()
+            value = imageQueue.get()
+            imageCollection += value
             try:
                 imageObject = ImageTk.PhotoImage(Image.open(io.BytesIO(imageCollection)))
                 imageLabel.config(image=imageObject)
             except OSError:
                 pass
+            if value == b"":
+                imageCollection = b""
     # Look for updates continuously from the other process (after 100ms) [this type of callback prevents recursion]
     rootView.after(100, collectUpdate)
 
