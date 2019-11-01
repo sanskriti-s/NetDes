@@ -4,7 +4,6 @@
     <list default="true" id="c66b59bc-7a4f-41bf-9b01-188e9c189548" name="Default Changelist" comment="">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/UDPClient.py" beforeDir="false" afterPath="$PROJECT_DIR$/UDPClient.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/UDPServer.py" beforeDir="false" afterPath="$PROJECT_DIR$/UDPServer.py" afterDir="false" />
     </list>
     <option name="EXCLUDED_CONVERTED_TO_IGNORED" value="true" />
     <option name="SHOW_DIALOG" value="false" />
@@ -227,7 +226,14 @@
       <option name="project" value="LOCAL" />
       <updated>1572617030692</updated>
     </task>
-    <option name="localTasksCounter" value="6" />
+    <task id="LOCAL-00006" summary="Error Handling implemented&#10;Notice: Timing still has not been finished">
+      <created>1572621511665</created>
+      <option name="number" value="00006" />
+      <option name="presentableId" value="LOCAL-00006" />
+      <option name="project" value="LOCAL" />
+      <updated>1572621511665</updated>
+    </task>
+    <option name="localTasksCounter" value="7" />
     <servers />
   </component>
   <component name="Vcs.Log.Tabs.Properties">
@@ -250,6 +256,7 @@
     <MESSAGE value="State logger works with reworked server set-up." />
     <MESSAGE value="Client and Server states are now built into their respective packages.&#10;Notice: Showing an image during transfer appears to have issues... we'll see if we can get that up and running. Otherwise, only error and timing need to be implemented left" />
     <MESSAGE value="Client and Server successfully running on their own processes (separate from the initial GUI packages).&#10;Successful showing of image transfer and states in approximately real time (minor delay due to queuing processing between child process and its parent).&#10;Notice: Timing and Error still need to be tested and injected into the system, but the GUI already supports this feature." />
-    <option name="LAST_COMMIT_MESSAGE" value="Client and Server successfully running on their own processes (separate from the initial GUI packages).&#10;Successful showing of image transfer and states in approximately real time (minor delay due to queuing processing between child process and its parent).&#10;Notice: Timing and Error still need to be tested and injected into the system, but the GUI already supports this feature." />
+    <MESSAGE value="Error Handling implemented&#10;Notice: Timing still has not been finished" />
+    <option name="LAST_COMMIT_MESSAGE" value="Error Handling implemented&#10;Notice: Timing still has not been finished" />
   </component>
 </project>

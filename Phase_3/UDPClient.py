@@ -10,6 +10,7 @@ import os
 import signal
 import multiprocessing
 import random
+import datetime
 
 # Creates a new window interface and labels it
 rootView = tk.Tk()
@@ -51,6 +52,7 @@ process = 0
 
 # Function serving as the point for the thread that will do the background work behind the GUI
 def clientActivity(connection, name, errorPercentage):
+    initialTime = datetime.datetime.now()
     mailBox = connection
     # The UDP socket is created.
     # The UDP socket is created same as the client.
@@ -98,10 +100,13 @@ def clientActivity(connection, name, errorPercentage):
                         stateMap = False
                         # Break when message ends
                         if message == b'':
+                            finalTime = datetime.datetime.now()
                             mailBox.put("... Image finished sending\n")
                             clientMap = False
                         sequenceNumberInt = sequenceSwitch(sequenceNumberInt)
                         # If all fail, then send the packet of data again, nothing in the sequence advances forward
+        finishTime = finalTime - initialTime
+        mailBox.put("Finish time: " + str(finishTime) + "\n")
         clientSocket.close()
 
 
@@ -177,7 +182,7 @@ def injectError(information, error):
         injection = int.from_bytes(information, byteorder="little")
         injection = bin(injection)
         injection = int(injection.translate(str.maketrans("10", "01"))[2:], 2)
-        information = injection.to_bytes(len(information), byteorder="little")
+        information = injection.to_bytes(1024, byteorder="little")
     return information
 
 # Checks if there is a message in the queue to update the GUI with for the action log or picture updater
