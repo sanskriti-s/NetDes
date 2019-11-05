@@ -2,8 +2,9 @@
 <project version="4">
   <component name="ChangeListManager">
     <list default="true" id="c66b59bc-7a4f-41bf-9b01-188e9c189548" name="Default Changelist" comment="">
+      <change beforePath="$PROJECT_DIR$/.idea/misc.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/misc.xml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/UDPClient.py" beforeDir="false" afterPath="$PROJECT_DIR$/UDPClient.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/final.bmp" beforeDir="false" />
     </list>
     <option name="EXCLUDED_CONVERTED_TO_IGNORED" value="true" />
     <option name="SHOW_DIALOG" value="false" />
@@ -34,7 +35,7 @@
   </component>
   <component name="PropertiesComponent">
     <property name="ASKED_ADD_EXTERNAL_FILES" value="true" />
-    <property name="last_opened_file_path" value="$PROJECT_DIR$" />
+    <property name="last_opened_file_path" value="$PROJECT_DIR$/../Phase_4" />
     <property name="settings.editor.selected.configurable" value="com.jetbrains.python.configuration.PyActiveSdkModuleConfigurable" />
   </component>
   <component name="PyConsoleOptionsProvider">
@@ -233,7 +234,14 @@
       <option name="project" value="LOCAL" />
       <updated>1572621511665</updated>
     </task>
-    <option name="localTasksCounter" value="7" />
+    <task id="LOCAL-00007" summary="Phase 03 Complete&#10;Notice: May need additional comments written">
+      <created>1572622662038</created>
+      <option name="number" value="00007" />
+      <option name="presentableId" value="LOCAL-00007" />
+      <option name="project" value="LOCAL" />
+      <updated>1572622662038</updated>
+    </task>
+    <option name="localTasksCounter" value="8" />
     <servers />
   </component>
   <component name="Vcs.Log.Tabs.Properties">
@@ -257,6 +265,7 @@
     <MESSAGE value="Client and Server states are now built into their respective packages.&#10;Notice: Showing an image during transfer appears to have issues... we'll see if we can get that up and running. Otherwise, only error and timing need to be implemented left" />
     <MESSAGE value="Client and Server successfully running on their own processes (separate from the initial GUI packages).&#10;Successful showing of image transfer and states in approximately real time (minor delay due to queuing processing between child process and its parent).&#10;Notice: Timing and Error still need to be tested and injected into the system, but the GUI already supports this feature." />
     <MESSAGE value="Error Handling implemented&#10;Notice: Timing still has not been finished" />
-    <option name="LAST_COMMIT_MESSAGE" value="Error Handling implemented&#10;Notice: Timing still has not been finished" />
+    <MESSAGE value="Phase 03 Complete&#10;Notice: May need additional comments written" />
+    <option name="LAST_COMMIT_MESSAGE" value="Phase 03 Complete&#10;Notice: May need additional comments written" />
   </component>
 </project>
