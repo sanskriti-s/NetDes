@@ -16,7 +16,7 @@ import datetime
 # Creates a new window interface and labels it
 rootView = tk.Tk()
 rootView.title("Client Package")
-rootView.geometry("525x400")
+rootView.geometry("525x500")
 
 # Creates a top label explaining instructions
 topLabel = tk.Label(rootView, text="If you are unsure of server hostname or IP please see info in server window.")
@@ -32,15 +32,21 @@ hostNameView = tk.Entry(rootView, width=20)
 hostNameView.grid(column=0, row=6)
 hostNameView.focus()
 
-# Creates labels and a spin object to choose the error level in the GUI
-spinnerLabel = tk.Label(rootView, text="Choose error percentage below:")
+# Creates a label and a spinner object to choose the error level in the GUI
+spinnerLabel = tk.Label(rootView, text="Choose data error percentage below:")
 spinnerLabel.grid(column=0, row=16)
 errorSpinner = tk.Spinbox(rootView, from_=0, to=99, width=5)
 errorSpinner.grid(column=0, row=18)
 
+# Creates a label and a spinner object to choose the loss level in the GUI
+lossLabel = tk.Label(rootView, text="Choose data loss percentage below:")
+lossLabel.grid(column=0, row=20)
+lossSpinner = tk.Spinbox(rootView, from_=0, to=99, width=5)
+lossSpinner.grid(column=0, row=22)
+
 # Creates a state/message log in the GUI
 stateLog = scrolledtext.ScrolledText(rootView, width=60, height=10)
-stateLog.grid(column=0, row=20)
+stateLog.grid(column=0, row=24)
 stateLog.insert(tk.END, "Client State Log:\n")
 
 # Set-up for multiprocessing communication support
@@ -56,8 +62,7 @@ imageLabel.grid(column=0, row=10)
 
 
 # Function serving as the point for the thread that will do the background work behind the GUI
-def clientActivity(connection, name, pathWay, errorPercentage):
-    initialTime = datetime.datetime.now()
+def clientActivity(connection, name, pathWay, errorPercentage, lossPercentage):
     mailBox = connection
     # The UDP socket is created.
     # The UDP socket is created same as the client.
@@ -73,8 +78,8 @@ def clientActivity(connection, name, pathWay, errorPercentage):
     # The variable message is set to the pixel values of image.bmp
     with open(pathWay, "rb") as image:
         clientMap = True
+        initialTime = datetime.datetime.now()
         while clientMap:
-            mailBox.put("State " + str(sequenceNumberInt) + ": Sending\n")
             stateMap = True
             # Parse though the image data to gather a message of only 1024 bytes
             message = image.read(1024)
@@ -85,30 +90,43 @@ def clientActivity(connection, name, pathWay, errorPercentage):
             # Change the integer checksum into a suitable bytes item for transport (4x2 bytes long)
             checksum = checksumInt.to_bytes(4, byteorder="little")
             while stateMap:
-                # Inject error into the outgoing message to the server
-                messageModed = injectError(message, errorPercentage)
-                # The packet is then prepared and sent via the client socket
-                data = sequenceNumber + checksum + messageModed
-                clientSocket.sendto(data, (name, serverPort))
-                mailBox.put("State " + str(sequenceNumberInt) + ": Waiting for ACK " +
-                            str(sequenceNumberInt) + "\n")
-                output, serverAddress = clientSocket.recvfrom(buf)
-                packet = sortData(output)
-                # Inject error into the incoming ACK
-                packet["ACK"] = injectError(packet["ACK"], errorPercentage)
-                packet["ACK_Int"] = int.from_bytes(packet["ACK"], byteorder="little")  # converted ACK into an integer
-                # State Switcher 0->1->0
-                if packet["SN"] == sequenceNumberInt:  # Does this ACK carry the proper SN?
-                    ackChecksum = generateChecksum(packet["ACK_Int"], packet["SN"], False)
-                    if verifyChecksum(packet["Checksum"], ackChecksum):  # Is the checksum valid?
-                        # Go on an send the next packet of data
-                        stateMap = False
-                        # Break when message ends
-                        if message == b'':
-                            finalTime = datetime.datetime.now()
-                            mailBox.put("... Image finished sending\n")
-                            clientMap = False
-                        sequenceNumberInt = sequenceSwitch(sequenceNumberInt)
+                lossMap = True
+                try:  # From the moment a new timer is started, make sure it can interrupt the current state
+                    # Inject error into the outgoing message to the server
+                    messageModed = injectError(message, errorPercentage)
+                    # The packet is then prepared and sent via the client socket
+                    data = sequenceNumber + checksum + messageModed
+                    mailBox.put("State " + str(sequenceNumberInt) + ": Sending\n")
+                    clientSocket.sendto(data, (name, serverPort))
+                    # Start the timer (45ms callback feature)
+                    signal.setitimer(signal.ITIMER_REAL, 0.45)
+                    mailBox.put("State " + str(sequenceNumberInt) + ": Waiting for ACK " +
+                                str(sequenceNumberInt) + "\n")
+                    # Inject potential packet "loss" into the client system
+                    while lossMap:
+                        output, serverAddress = clientSocket.recvfrom(buf)
+                        lossMap = injectLoss(lossPercentage)
+                    packet = sortData(output)
+                    # Inject error into the incoming ACK
+                    packet["ACK"] = injectError(packet["ACK"], errorPercentage)
+                    packet["ACK_Int"] = int.from_bytes(packet["ACK"], byteorder="little")  # converted ACK into an integer
+                    # State Switcher 0->1->0
+                    if packet["SN"] == sequenceNumberInt:  # Does this ACK carry the proper SN?
+                        ackChecksum = generateChecksum(packet["ACK_Int"], packet["SN"], False)
+                        if verifyChecksum(packet["Checksum"], ackChecksum):  # Is the checksum valid?
+                            # Stop the timer/alarm, as a proper ACK has been received
+                            signal.alarm(0)
+                            stateMap = False
+                            # Break when message ends
+                            if message == b'':
+                                finalTime = datetime.datetime.now()
+                                mailBox.put("... Image finished sending\n")
+                                clientMap = False
+                            sequenceNumberInt = sequenceSwitch(sequenceNumberInt)
+                    # Stop the timer/alarm, as an improper ACK has been received, so data will be resent anyway
+                    signal.alarm(0)
+                except TypeError:
+                        pass  # Go back, and send the old data again, after the timer is stopped
                         # If all fail, then send the packet of data again, nothing in the sequence advances forward
         finishTime = finalTime - initialTime
         mailBox.put("Finish time: " + str(finishTime) + "\n")
@@ -127,8 +145,9 @@ def onClick():
         stateLog.yview(tk.END)
     else:
         # Start multiprocessing the background activity of the server application
+        signal.signal(signal.SIGALRM, clientActivity)  # child activity handles the alarm signal call
         process = multiprocessing.Process(target=clientActivity, args=(queue, serverName, imagePath,
-                                                                       int(errorSpinner.get())))
+                                                                       int(errorSpinner.get()), int(lossSpinner.get())))
         process.start()
 
 
@@ -197,6 +216,7 @@ def sequenceSwitch(value):
 
 
 # A simple function call that injects data bit error and Ack error into the system intentionally
+# returns either the ack with error, or no error.
 def injectError(information, error):
     if error > 99:
         error = 99
@@ -208,6 +228,16 @@ def injectError(information, error):
         information = injection.to_bytes(1024, byteorder="little")
     return information
 
+
+# A simple function call that, using probability, determines if a received ack "exists" or not
+# returns True, if the data is to be ignored, and False if the data is to be accepted
+def injectLoss(loss):
+    if loss > 99:
+        loss = 99
+    randomLoss = random.randrange(1, 100)
+    if randomLoss < loss:
+        return True
+    return False
 
 # Checks if there is a message in the queue to update the GUI with for the action log or picture updater
 def collectUpdate():
@@ -223,7 +253,7 @@ def collectUpdate():
 
 
 # Creates a button to initiate the send and to show sending info
-sendButton = tk.Button(rootView, text="Send Image", command=onClick)
+sendButton = tk.Button(rootView, text="Transfer Image", command=onClick)
 sendButton.grid(column=0, row=12)
 
 # Creates a button to open a filedialog from Tkinter to select a different image than the default
