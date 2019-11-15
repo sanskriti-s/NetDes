@@ -106,6 +106,8 @@ def clientActivity(connection, name, pathWay, errorPercentage, lossPercentage):
                     while lossMap:
                         output, serverAddress = clientSocket.recvfrom(buf)
                         lossMap = injectLoss(lossPercentage)
+                    # Stop the timer/alarm, as an ACK has been received
+                    signal.alarm(0)
                     packet = sortData(output)
                     # Inject error into the incoming ACK
                     packet["ACK"] = injectError(packet["ACK"], errorPercentage)
@@ -114,8 +116,6 @@ def clientActivity(connection, name, pathWay, errorPercentage, lossPercentage):
                     if packet["SN"] == sequenceNumberInt:  # Does this ACK carry the proper SN?
                         ackChecksum = generateChecksum(packet["ACK_Int"], packet["SN"], False)
                         if verifyChecksum(packet["Checksum"], ackChecksum):  # Is the checksum valid?
-                            # Stop the timer/alarm, as a proper ACK has been received
-                            signal.alarm(0)
                             stateMap = False
                             # Break when message ends
                             if message == b'':
@@ -123,8 +123,6 @@ def clientActivity(connection, name, pathWay, errorPercentage, lossPercentage):
                                 mailBox.put("... Image finished sending\n")
                                 clientMap = False
                             sequenceNumberInt = sequenceSwitch(sequenceNumberInt)
-                    # Stop the timer/alarm, as an improper ACK has been received, so data will be resent anyway
-                    signal.alarm(0)
                 except TypeError:
                         pass  # Go back, and send the old data again, after the timer is stopped
                         # If all fail, then send the packet of data again, nothing in the sequence advances forward
@@ -143,6 +141,7 @@ def onClick():
     if serverName == "":
         stateLog.insert(tk.END, "Error: Cannot Send, Invalid Server IPA/Name\n")
         stateLog.yview(tk.END)
+        sendButton.configure(state=tk.ACTIVE)
     else:
         # Start multiprocessing the background activity of the server application
         signal.signal(signal.SIGALRM, clientActivity)  # child activity handles the alarm signal call
