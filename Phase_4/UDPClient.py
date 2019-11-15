@@ -90,22 +90,25 @@ def clientActivity(connection, name, pathWay, errorPercentage, lossPercentage):
             # Change the integer checksum into a suitable bytes item for transport (4x2 bytes long)
             checksum = checksumInt.to_bytes(4, byteorder="little")
             while stateMap:
-                lossMap = True
+                lossMapACK = True
                 try:  # From the moment a new timer is started, make sure it can interrupt the current state
                     # Inject error into the outgoing message to the server
                     messageModed = injectError(message, errorPercentage)
                     # The packet is then prepared and sent via the client socket
                     data = sequenceNumber + checksum + messageModed
                     mailBox.put("State " + str(sequenceNumberInt) + ": Sending\n")
-                    clientSocket.sendto(data, (name, serverPort))
+                    # Inject potential packet "loss" into the client system
+                    lossMap = injectLoss(lossPercentage)
+                    if not lossMap:
+                        clientSocket.sendto(data, (name, serverPort))
                     # Start the timer (45ms callback feature)
                     signal.setitimer(signal.ITIMER_REAL, 0.45)
                     mailBox.put("State " + str(sequenceNumberInt) + ": Waiting for ACK " +
                                 str(sequenceNumberInt) + "\n")
-                    # Inject potential packet "loss" into the client system
-                    while lossMap:
+                    # Inject potential ACK packet "loss" into the client system
+                    while lossMapACK:
                         output, serverAddress = clientSocket.recvfrom(buf)
-                        lossMap = injectLoss(lossPercentage)
+                        lossMapACK = injectLoss(lossPercentage)
                     # Stop the timer/alarm, as an ACK has been received
                     signal.alarm(0)
                     packet = sortData(output)
