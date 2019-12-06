@@ -46,9 +46,9 @@ imageCollection = b""
 def serverActivity(connection, relay):
     mailBox = connection
     pictureBox = relay
-    # The server port and buffer are set to the same as the client
+    # The server port and buffer are set to the same as what's within the client
     serverPort = 12000
-    buf = 6000
+    buf = 10000
     # The UDP socket is created same as the client.
     # AF_INET indicates that the underlying network is using IPv4.
     # SOCK_DGRAM means it is a UDP socket (rather than a TCP socket.)
@@ -68,7 +68,7 @@ def serverActivity(connection, relay):
             mailBox.put("State " + str(expectedSequence) + ": Receiving\n")
             output, clientAddress = serverSocket.recvfrom(buf)
             packet = sortData(output)
-            # State Switcher 0->1->0
+            # State Jumper
             if packet["SN"] == expectedSequence:  # Is the SN the expected value?
                 # Check the output's checksum
                 checksum = generateChecksum(packet["Message_Int"], packet["SN"], False)
@@ -78,23 +78,23 @@ def serverActivity(connection, relay):
                     # Send an ACK that indicates that data was properly received
                     ackCheckInt = generateChecksum(int.from_bytes(ack, byteorder="little"), expectedSequence, True)
                     ackChecksum = ackCheckInt.to_bytes(4, byteorder="little")
-                    switchback = packet["SN"].to_bytes(1, byteorder="little") + ackChecksum + ack
+                    switchback = expectedSequence.to_bytes(3, byteorder="little") + ackChecksum + ack
                     serverSocket.sendto(switchback, clientAddress)
                     if packet["Message"] == b'':
                         receiveFile = False
                 else:  # If the checksum does not match up, send an ACK asking for the data again
-                    expectedSequence = sequenceSwitch(expectedSequence)
+                    expectedSequence -= 1
                     ackCheckInt = generateChecksum(int.from_bytes(ack, byteorder="little"), expectedSequence, True)
                     ackChecksum = ackCheckInt.to_bytes(4, byteorder="little")
-                    switchback = packet["SN"].to_bytes(1, byteorder="little") + ackChecksum + ack
+                    switchback = expectedSequence.to_bytes(3, byteorder="little") + ackChecksum + ack
                     serverSocket.sendto(switchback, clientAddress)
             else:  # If the SN is incorrect, send an ACK asking for the data again
-                expectedSequence = sequenceSwitch(expectedSequence)
+                expectedSequence -= 1
                 ackCheckInt = generateChecksum(int.from_bytes(ack, byteorder="little"), expectedSequence, True)
                 ackChecksum = ackCheckInt.to_bytes(4, byteorder="little")
-                switchback = packet["SN"].to_bytes(1, byteorder="little") + ackChecksum + ack
+                switchback = expectedSequence.to_bytes(3, byteorder="little") + ackChecksum + ack
                 serverSocket.sendto(switchback, clientAddress)
-            expectedSequence = sequenceSwitch(expectedSequence)
+            expectedSequence += 1
 
         # Show the image file
         image = Image.open(io.BytesIO(message))
@@ -151,22 +151,13 @@ def verifyChecksum(value, checksum):
 # Sort the incoming data into its component forms, and return a dictionary of this information
 def sortData(data):
     dictionary = {}
-    dictionary["SN"] = data[0]  # sequence number leads the data received (1x2 bytes long)
-    dictionary["Checksum"] = int.from_bytes(data[1:4], byteorder="little")  # the checksum is before the message data
+    # sequence number leads the data received
+    dictionary["SN"] = int.from_bytes(data[0:2], byteorder="little")
+    dictionary["Checksum"] = int.from_bytes(data[3:6], byteorder="little")  # the checksum is before the message data
     # received (4x2 bytes long)
-    dictionary["Message"] = data[5:]  # message data received (1024 bytes long)
-    dictionary["Message_Int"] = int.from_bytes(data[5:], byteorder="little")  # converted message data into an integer
+    dictionary["Message"] = data[7:]  # message data received (1024 bytes long)
+    dictionary["Message_Int"] = int.from_bytes(data[7:], byteorder="little")  # converted message data into an integer
     return dictionary
-
-
-# Simple function call to switch the value of the SN
-def sequenceSwitch(value):
-    # Swap the sequence number between each case
-    if value == 1:
-        value = 0
-    else:
-        value = 1
-    return value
 
 
 # Checks if there is a message in the queue to update the GUI with for the action log or picture updater
