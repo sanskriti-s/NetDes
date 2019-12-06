@@ -39,7 +39,6 @@ stateLog.insert(tk.END, "Server State Log:\n")
 imageObject = ImageTk.PhotoImage(Image.open("Mamemon.jpeg"))
 imageLabel = tk.Label(rootView, image=imageObject)
 imageLabel.grid(column=0, row=8)
-imageCollection = b""
 
 
 # Function serving as the point for the thread that will do the background work behind the GUI
@@ -56,48 +55,41 @@ def serverActivity(connection, relay):
     # The port number 12000 is bound to the servers socket.
     serverSocket.bind(('', serverPort))
 
-    message = b""
+    message = {}
     ack = "ACK".encode("UTF-8")
     # Enters an indefinite loop
     while True:
         mailBox.put("Prepared to receive image data...\n")
-        expectedSequence = 0
         receiveFile = True
+        message = {}
         while receiveFile:
             # The message is received from the client and the client address is saved
-            mailBox.put("State " + str(expectedSequence) + ": Receiving\n")
             output, clientAddress = serverSocket.recvfrom(buf)
             packet = sortData(output)
             # State Jumper
-            if packet["SN"] == expectedSequence:  # Is the SN the expected value?
-                # Check the output's checksum
-                checksum = generateChecksum(packet["Message_Int"], packet["SN"], False)
-                if verifyChecksum(packet["Checksum"], checksum):  # Does the checksum match up?
-                    message += packet["Message"]  # Send the data up to the application level
-                    pictureBox.put(packet["Message"])
-                    # Send an ACK that indicates that data was properly received
-                    ackCheckInt = generateChecksum(int.from_bytes(ack, byteorder="little"), expectedSequence, True)
-                    ackChecksum = ackCheckInt.to_bytes(4, byteorder="little")
-                    switchback = expectedSequence.to_bytes(3, byteorder="little") + ackChecksum + ack
-                    serverSocket.sendto(switchback, clientAddress)
-                    if packet["Message"] == b'':
-                        receiveFile = False
-                else:  # If the checksum does not match up, send an ACK asking for the data again
-                    expectedSequence -= 1
-                    ackCheckInt = generateChecksum(int.from_bytes(ack, byteorder="little"), expectedSequence, True)
-                    ackChecksum = ackCheckInt.to_bytes(4, byteorder="little")
-                    switchback = expectedSequence.to_bytes(3, byteorder="little") + ackChecksum + ack
-                    serverSocket.sendto(switchback, clientAddress)
-            else:  # If the SN is incorrect, send an ACK asking for the data again
-                expectedSequence -= 1
-                ackCheckInt = generateChecksum(int.from_bytes(ack, byteorder="little"), expectedSequence, True)
+            # Check the output's checksum
+            checksum = generateChecksum(packet["Message_Int"], packet["SN"], packet["Total_Collection"], False)
+            if verifyChecksum(packet["Checksum"], checksum):  # Does the checksum match up?
+                message[str(packet["SN"])] = packet["Message"]  # Send the data up to the application level
+                mailBox.put("State " + str(packet["SN"]) + ": Received\n")
+                # Send an ACK that indicates that data was properly received
+                ackCheckInt = generateChecksum(int.from_bytes(ack, byteorder="little"), packet["SN"],
+                                               packet["Total_Collection"], True)
                 ackChecksum = ackCheckInt.to_bytes(4, byteorder="little")
-                switchback = expectedSequence.to_bytes(3, byteorder="little") + ackChecksum + ack
+                switchback = packet["SN"].to_bytes(3, byteorder="little") + ackChecksum + ack
                 serverSocket.sendto(switchback, clientAddress)
-            expectedSequence += 1
+                if len(message) == packet["Total_Collection"]:
+                    receiveFile = False
+
+        # Order the message into a single variable
+        orderedMessage = b""
+        for x in range(packet["Total_Collection"] - 1):
+            orderedMessage += message[str(x)]
+
+        pictureBox.put(orderedMessage)
 
         # Show the image file
-        image = Image.open(io.BytesIO(message))
+        image = Image.open(io.BytesIO(orderedMessage))
         format = image.format
 
         # Deleting end-of-transfer saved files, if they exist
@@ -121,8 +113,8 @@ def serverActivity(connection, relay):
 
 
 # Generate the checksum for the given 1kB chunk of data and the SN
-def generateChecksum(data, sn, flag):
-    a = sn
+def generateChecksum(data, sn, fSN, flag):
+    a = sn + fSN
     d = bin(data)[2:]
     for x in range(0, 511):
         temp = a
@@ -153,31 +145,25 @@ def sortData(data):
     dictionary = {}
     # sequence number leads the data received
     dictionary["SN"] = int.from_bytes(data[0:2], byteorder="little")
-    dictionary["Checksum"] = int.from_bytes(data[3:6], byteorder="little")  # the checksum is before the message data
+    dictionary["Total_Collection"] = int.from_bytes(data[3:6], byteorder="little")  # the total amount of packets
+    # that are in the image collection (4x2 bytes long)
+    dictionary["Checksum"] = int.from_bytes(data[7:10], byteorder="little")  # the checksum is before the message data
     # received (4x2 bytes long)
-    dictionary["Message"] = data[7:]  # message data received (1024 bytes long)
-    dictionary["Message_Int"] = int.from_bytes(data[7:], byteorder="little")  # converted message data into an integer
+    dictionary["Message"] = data[11:]  # message data received (1024 bytes long)
+    dictionary["Message_Int"] = int.from_bytes(data[11:], byteorder="little")  # converted message data into an integer
     return dictionary
 
 
 # Checks if there is a message in the queue to update the GUI with for the action log or picture updater
 def collectUpdate():
-    global imageCollection
     global imageObject
     while (not queue.empty()) or (not imageQueue.empty()):
         if not queue.empty():
             stateLog.insert(tk.END, queue.get())
             stateLog.yview(tk.END)
         if not imageQueue.empty():
-            value = imageQueue.get()
-            imageCollection += value
-            try:
-                imageObject = ImageTk.PhotoImage(Image.open(io.BytesIO(imageCollection)))
-                imageLabel.config(image=imageObject)
-            except OSError:
-                pass
-            if value == b"":
-                imageCollection = b""
+            imageObject = ImageTk.PhotoImage(Image.open(io.BytesIO(imageQueue.get())))
+            imageLabel.config(image=imageObject)
     # Look for updates continuously from the other process (after 100ms) [this type of callback prevents recursion]
     rootView.after(100, collectUpdate)
 

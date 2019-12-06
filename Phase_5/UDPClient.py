@@ -85,6 +85,7 @@ def clientActivity(connection, progress, name, pathWay, errorPercentage, lossPer
     progressBox.put(0)
     # Initialize an empty list for the image data, along with the necessary variables to control it
     message = []
+    list = []
     i = 0
     # The variable message is set to the pixel values of image.bmp
     with open(pathWay, "rb") as image:
@@ -94,85 +95,96 @@ def clientActivity(connection, progress, name, pathWay, errorPercentage, lossPer
             i += 1
             if message[i - 1] == b"":
                 imageMap = False
+                i -= 0
+
+    # Create a list of what SN's will exist in this transfer
+    for x in range(i):
+        list.append(x)
+
     # Initialize the base and next value for the Go-Back-N situation
-    base = 0
     N = 10
     clientMap = True
     initialTime = datetime.datetime.now()
+    progressValue = 0
     while clientMap:
         try:
-            nextSequenceNumber = base
-            while nextSequenceNumber < (base + N):
-                # Generate the checksum (int)
-                checksumInt = generateChecksum(int.from_bytes(message[nextSequenceNumber], byteorder="little"), nextSequenceNumber, True)
-                # Change the sequence number into a suitable bytes item for transport (1x2 bytes long)
-                sequenceNumber = nextSequenceNumber.to_bytes(3, byteorder="little")
-                # Change the integer checksum into a suitable bytes item for transport (4x2 bytes long)
-                checksum = checksumInt.to_bytes(4, byteorder="little")
-                lossMapACK = True
-                # From the moment a new timer is started, make sure it can interrupt the current state
-                # Inject error into the outgoing message to the server
-                messageModed = injectError(message[nextSequenceNumber], errorPercentage)
-                # The packet is then prepared and sent via the client socket
-                data = sequenceNumber + checksum + messageModed
-                mailBox.put("State " + str(nextSequenceNumber) + ": Sending\n")
-                # Inject potential packet "loss" into the client system
-                lossMap = injectLoss(lossPercentage)
-                if not lossMap:
-                    clientSocket.sendto(data, (name, serverPort))
-                if base == nextSequenceNumber:
-                    pass
+            if not (len(list) == 0):
+                nextSequenceNumber = 0
+                while nextSequenceNumber < N:
+                    # Generate the checksum (int)
+                    checksumInt = generateChecksum(int.from_bytes(message[list[nextSequenceNumber]], byteorder="little")
+                                                   , list[nextSequenceNumber], i, True)
+                    # Change the sequence number into a suitable bytes item for transport (3x2 bytes long)
+                    sequenceNumber = list[nextSequenceNumber].to_bytes(3, byteorder="little")
+                    # Change the integer for the total number of packets in the image to a bytes item (4x2 bytes long)
+                    finalSN = i.to_bytes(4, byteorder="little")
+                    # Change the integer checksum into a suitable bytes item for transport (4x2 bytes long)
+                    checksum = checksumInt.to_bytes(4, byteorder="little")
+                    # Inject error into the outgoing message to the server
+                    messageModed = injectError(message[list[nextSequenceNumber]], errorPercentage)
+                    # The packet is then prepared and sent via the client socket
+                    data = sequenceNumber + finalSN + checksum + messageModed
+                    mailBox.put("State " + str(list[nextSequenceNumber]) + ": Sending\n")
+                    # Inject potential packet "loss" into the client system
+                    lossMap = injectLoss(lossPercentage)
+                    if not lossMap:
+                        clientSocket.sendto(data, (name, serverPort))
+                    if nextSequenceNumber == len(list) - 1:
+                        nextSequenceNumber = N
+                    else:
+                        nextSequenceNumber += 1
                     # Start the timer (45ms callback feature)
-                    #signal.setitimer(signal.ITIMER_REAL, 0.45)
-                if message[nextSequenceNumber] == b'':
-                    nextSequenceNumber = base + N
-                else:
-                    nextSequenceNumber += 1
+                    signal.setitimer(signal.ITIMER_REAL, 0.45)
+            else:
+                clientMap = False
 
             # Prepare for the rdt_receive sequence to initiate
             receiveMap = True
-            if nextSequenceNumber > i:
-                mailBox.put("State " + str(i) + ": Waiting for ACK up to " +
-                            str(i) + "\n")
-            else:
-                mailBox.put("State " + str(nextSequenceNumber - 1) + ": Waiting for ACK up to " +
-                            str(nextSequenceNumber - 1) + "\n")
+            lossMapACK = True
+            counter = 0
 
             # RDT_RECEIVE functionality
-            while receiveMap:
-                output, serverAddress = clientSocket.recvfrom(buf)
-                # Inject potential ACK packet "loss" into the client system
-                while lossMapACK:
-                    lossMapACK = injectLoss(lossPercentage)
-                packet = sortData(output)
-                # Inject error into the incoming ACK
-                packet["ACK"] = injectError(packet["ACK"], errorPercentage)
-                # converted ACK into an integer
-                packet["ACK_Int"] = int.from_bytes(packet["ACK"], byteorder="little")
-                # State Jumper
-                ackChecksum = generateChecksum(packet["ACK_Int"], packet["SN"], False)
-                if verifyChecksum(packet["Checksum"], ackChecksum):  # Is the checksum valid?
-                    base = packet["SN"] + 1
-                    progressBox.put(math.floor((packet["SN"] + 1 / i + 1) * 100) * 4)
-                    if base == nextSequenceNumber:
-                        # Stop the timer/alarm, as the final ACK has been received
-                        signal.alarm(0)
-                        receiveMap = False
-                    else:
-                        # Stop the previous alarm before setting a new one
-                        signal.alarm(0)
-                        # Start the timer (45ms callback feature)
-                        signal.setitimer(signal.ITIMER_REAL, 0.45)
-                    # Break when the sequence ends completely
-                    if base == i:
-                        finalTime = datetime.datetime.now()
-                        mailBox.put("... Image finished sending\n")
-                        clientMap = False
+            if not (len(list) == 0):
+                while receiveMap:
+                    output, serverAddress = clientSocket.recvfrom(buf)
+                    # Inject potential ACK packet "loss" into the client system
+                    while lossMapACK:
+                        lossMapACK = injectLoss(lossPercentage)
+                    packet = sortData(output)
+                    # Inject error into the incoming ACK
+                    packet["ACK"] = injectError(packet["ACK"], errorPercentage)
+                    # converted ACK into an integer
+                    packet["ACK_Int"] = int.from_bytes(packet["ACK"], byteorder="little")
+                    # State Jumper
+                    ackChecksum = generateChecksum(packet["ACK_Int"], packet["SN"], i, False)
+                    if verifyChecksum(packet["Checksum"], ackChecksum):  # Is the checksum valid?
+                        counter += 1
+                        progressValue += 1
+                        if counter == 10:
+                            # Stop the timer/alarm, as the final ACK has been received
+                            signal.alarm(0)
+                            receiveMap = False
+                        # ACK the from the current window sequence, as it has been verified as sent
+                        list.remove(packet["SN"])
+                        mailBox.put("State " + str(packet["SN"]) + ": Received Packet\n")
+                        progressBox.put(math.floor((progressValue / i) * 100))
+                        # Break when the sequence ends completely
+                        if len(list) == 0:
+                            signal.alarm(0)
+                            finalTime = datetime.datetime.now()
+                            mailBox.put("... Image finished sending\n")
+                            clientMap = False
+                            receiveMap = False
+            else:
+                clientMap = False
         except TypeError:
             pass  # Go back, and send the old data again, after the timer is stopped
             # If all fail, then send the packet of data again, nothing in the sequence advances forward
     finishTime = finalTime - initialTime
     mailBox.put("Finish time: " + str(finishTime) + "\n")
+    mailBox.put("----------------------------------------")
+    progressBox.put(0)
+    # Close and end the process in progress
     clientSocket.close()
 
 
@@ -181,7 +193,7 @@ def onClick():
     global sendButton
     global process
     sendButton.configure(state=tk.DISABLED)
-    # Server name is set to localhost as we are working on one system
+    # Server name is set to localhost as we are sending within the same device, ideally
     serverName = hostNameView.get()
     if serverName == "":
         stateLog.insert(tk.END, "Error: Cannot Send, Invalid Server IPA/Name\n")
@@ -212,8 +224,8 @@ def onSelect():
 
 
 # Generate the checksum for the given 1kB chunk of data and SN
-def generateChecksum(data, sn, flag):
-    a = sn
+def generateChecksum(data, sn, fSN, flag):
+    a = sn + fSN
     d = bin(data)[2:]
     for x in range(0, 511):
         temp = a
@@ -300,5 +312,5 @@ rootView.after(100, collectUpdate())
 # Show the window GUI in the OS of the user
 rootView.mainloop()
 
-if not process == 0:
+if not (type(process) == int):
     os.kill(process.pid, signal.SIGABRT)
