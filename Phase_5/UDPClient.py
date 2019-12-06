@@ -115,7 +115,7 @@ def clientActivity(connection, progress, name, pathWay, errorPercentage, lossPer
     for x in range(i):
         list.append(x)
 
-    # Initialize the base and next value for the Go-Back-N situation
+    # Initialize the base and next value for the Selective Repeat situation
     N = value
     clientMap = True
     initialTime = datetime.datetime.now()

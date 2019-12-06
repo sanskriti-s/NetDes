@@ -47,7 +47,7 @@ def serverActivity(connection, relay):
     pictureBox = relay
     # The server port and buffer are set to the same as what's within the client
     serverPort = 12000
-    buf = 10000
+    buf = 1035
     # The UDP socket is created same as the client.
     # AF_INET indicates that the underlying network is using IPv4.
     # SOCK_STREAM means it is a TCP socket
@@ -56,7 +56,6 @@ def serverActivity(connection, relay):
     serverSocket.bind(('localhost', serverPort))
     # Listen for incoming connections
     serverSocket.listen()
-    message = {}
     ack = "ACK".encode("UTF-8")
     # Enters an indefinite loop
     while True:

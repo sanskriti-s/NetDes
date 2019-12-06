@@ -50,7 +50,7 @@ lossSpinner.grid(column=0, row=22)
 nLabel = tk.Label(rootView, text="Select sending window size (N) below:")
 nLabel.grid(column=0, row=24)
 nValue = tk.StringVar(rootView)
-nValue.set("10")
+nValue.set("1")
 nSpinner = tk.Spinbox(rootView, from_=1, to=100, width=5, textvariable=nValue)
 nSpinner.grid(column=0, row=26)
 
@@ -93,8 +93,8 @@ def clientActivity(connection, progress, name, pathWay, errorPercentage, lossPer
     clientSocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     # Server Port chosen arbitrarily
     serverPort = 12000
-    # Buffer size set to 10000 bytes
-    buf = 10000
+    # Buffer size set to 1035 bytes
+    buf = 1035
     # Connect to the TCPServer
     clientSocket.connect((name, serverPort))
     mailBox.put("Beginning to send image data...\n")
@@ -117,12 +117,12 @@ def clientActivity(connection, progress, name, pathWay, errorPercentage, lossPer
     for x in range(i):
         list.append(x)
 
-    # Initialize the base and next value for the Go-Back-N situation
-    N = value
     clientMap = True
     initialTime = datetime.datetime.now()
     progressValue = 0
     while clientMap:
+        # Dynamically set the value of N for congestion control purposes
+        N = value
         try:
             if not (len(list) == 0):
                 nextSequenceNumber = 0
@@ -180,7 +180,7 @@ def clientActivity(connection, progress, name, pathWay, errorPercentage, lossPer
                 clientMap = False
 
             # Start the timer (1s callback feature)
-            signal.setitimer(signal.ITIMER_REAL, 1)
+            clientSocket.settimeout(1)
 
             # Prepare for the rdt_receive sequence to initiate
             receiveMap = True
@@ -201,12 +201,14 @@ def clientActivity(connection, progress, name, pathWay, errorPercentage, lossPer
                     packet["ACK_Int"] = int.from_bytes(packet["ACK"], byteorder="little")
                     if safety:
                         progressValue += 1
+                        value += 1
                     # State Jumper
                     ackChecksum = generateChecksum(packet["ACK_Int"], packet["SN"], i, False)
                     if verifyChecksum(packet["Checksum"], ackChecksum):  # Is the checksum valid?
                         counter += 1
                         if not safety:
                             progressValue += 1
+                            value += 1
                         if counter == N:
                             # Stop the timer/alarm, as the final ACK has been received
                             signal.alarm(0)
@@ -226,8 +228,8 @@ def clientActivity(connection, progress, name, pathWay, errorPercentage, lossPer
                                 receiveMap = False
             else:
                 clientMap = False
-        except TypeError:
-            # Go back, and send the old data again, after the timer is stopped
+        except Exception:
+            value /= 2  # Go back, and send the old data again, after the timer is stopped
             if safety:  # Removes the safety of the system, and allows it to progress without all ACK
                 if len(list) == 0:
                     finalTime = datetime.datetime.now()

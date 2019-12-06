@@ -54,8 +54,6 @@ def serverActivity(connection, relay):
     serverSocket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     # The port number 12000 is bound to the servers socket.
     serverSocket.bind(('', serverPort))
-
-    message = {}
     ack = "ACK".encode("UTF-8")
     # Enters an indefinite loop
     while True:
