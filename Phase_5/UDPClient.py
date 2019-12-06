@@ -18,7 +18,7 @@ import math
 # Creates a new window interface and labels it
 rootView = tk.Tk()
 rootView.title("Client Package")
-rootView.geometry("525x500")
+rootView.geometry("525x550")
 
 # Creates a top label explaining instructions
 topLabel = tk.Label(rootView, text="If you are unsure of server hostname or IP please see info in server window.")
@@ -46,9 +46,17 @@ lossLabel.grid(column=0, row=20)
 lossSpinner = tk.Spinbox(rootView, from_=0, to=99, width=5)
 lossSpinner.grid(column=0, row=22)
 
+# Creates a label and a spinner object to choose the window size in the GUI
+nLabel = tk.Label(rootView, text="Select sending window size (N) below:")
+nLabel.grid(column=0, row=24)
+nValue = tk.StringVar(rootView)
+nValue.set("10")
+nSpinner = tk.Spinbox(rootView, from_=1, to=100, width=5, textvariable=nValue)
+nSpinner.grid(column=0, row=26)
+
 # Creates a state/message log in the GUI
 stateLog = scrolledtext.ScrolledText(rootView, width=60, height=10)
-stateLog.grid(column=0, row=24)
+stateLog.grid(column=0, row=28)
 stateLog.insert(tk.END, "Client State Log:\n")
 
 # Set-up for multiprocessing communication support
@@ -65,11 +73,17 @@ imageLabel.grid(column=0, row=10)
 
 # Creates a progress bar to show the state of the transfer
 progressBar = Progressbar(rootView, length=400)
-progressBar.grid(column=0, row=26)
+progressBar.grid(column=0, row=30)
+
+# Creates a checkbox for REMOVING data loss features in this program
+recoveryValue = tk.BooleanVar()
+recoveryValue.set(False)
+recoveryBox = tk.Checkbutton(rootView, text="No Loss Recovery?", var=recoveryValue)
+recoveryBox.grid(column=0, row=32)
 
 
 # Function serving as the point for the thread that will do the background work behind the GUI
-def clientActivity(connection, progress, name, pathWay, errorPercentage, lossPercentage):
+def clientActivity(connection, progress, name, pathWay, errorPercentage, lossPercentage, safety, value):
     mailBox = connection
     progressBox = progress
     # The UDP socket is created.
@@ -102,7 +116,7 @@ def clientActivity(connection, progress, name, pathWay, errorPercentage, lossPer
         list.append(x)
 
     # Initialize the base and next value for the Go-Back-N situation
-    N = 10
+    N = value
     clientMap = True
     initialTime = datetime.datetime.now()
     progressValue = 0
@@ -112,31 +126,59 @@ def clientActivity(connection, progress, name, pathWay, errorPercentage, lossPer
                 nextSequenceNumber = 0
                 while nextSequenceNumber < N:
                     # Generate the checksum (int)
-                    checksumInt = generateChecksum(int.from_bytes(message[list[nextSequenceNumber]], byteorder="little")
-                                                   , list[nextSequenceNumber], i, True)
-                    # Change the sequence number into a suitable bytes item for transport (3x2 bytes long)
-                    sequenceNumber = list[nextSequenceNumber].to_bytes(3, byteorder="little")
+                    if safety:
+                        checksumInt = generateChecksum(
+                            int.from_bytes(message[list[0]], byteorder="little"),
+                            list[0], i, True)
+                        # Change the sequence number into a suitable bytes item for transport (3x2 bytes long)
+                        sequenceNumber = list[0].to_bytes(3, byteorder="little")
+                    else:
+                        checksumInt = generateChecksum(
+                            int.from_bytes(message[list[nextSequenceNumber]], byteorder="little"),
+                            list[nextSequenceNumber], i, True)
+                        # Change the sequence number into a suitable bytes item for transport (3x2 bytes long)
+                        sequenceNumber = list[nextSequenceNumber].to_bytes(3, byteorder="little")
                     # Change the integer for the total number of packets in the image to a bytes item (4x2 bytes long)
                     finalSN = i.to_bytes(4, byteorder="little")
                     # Change the integer checksum into a suitable bytes item for transport (4x2 bytes long)
                     checksum = checksumInt.to_bytes(4, byteorder="little")
-                    # Inject error into the outgoing message to the server
-                    messageModed = injectError(message[list[nextSequenceNumber]], errorPercentage)
+                    if safety:
+                        # Inject error into the outgoing message to the server
+                        messageModed, truth = injectError(message[list[0]], errorPercentage)
+                        if truth:
+                            i -= 1
+                            finalSN = i.to_bytes(4, byteorder="little")
+                    else:
+                        # Inject error into the outgoing message to the server
+                        messageModed, fake = injectError(message[list[nextSequenceNumber]], errorPercentage)
                     # The packet is then prepared and sent via the client socket
                     data = sequenceNumber + finalSN + checksum + messageModed
-                    mailBox.put("State " + str(list[nextSequenceNumber]) + ": Sending\n")
                     # Inject potential packet "loss" into the client system
                     lossMap = injectLoss(lossPercentage)
+                    # Ignore packet loss when safety features are removed by the user
+                    if lossMap:
+                        if safety:
+                            i -= 1
+                            finalSN = i.to_bytes(4, byteorder="little")
+                            data = sequenceNumber + finalSN + checksum + messageModed
                     if not lossMap:
                         clientSocket.sendto(data, (name, serverPort))
-                    if nextSequenceNumber == len(list) - 1:
+                    # Removes the safety feature that the list provides for the user
+                    if safety:
+                        list.remove(int.from_bytes(sequenceNumber, byteorder="little"))
+                        mailBox.put("State " + str(int.from_bytes(sequenceNumber, byteorder="little")) + ": Sending\n")
+                    else:
+                        mailBox.put("State " + str(list[nextSequenceNumber]) + ": Sending\n")
+                    # Exit the loop, or keep going?
+                    if (nextSequenceNumber == len(list) - 1) or (len(list) == 0):
                         nextSequenceNumber = N
                     else:
                         nextSequenceNumber += 1
-                    # Start the timer (45ms callback feature)
-                    signal.setitimer(signal.ITIMER_REAL, 0.45)
             else:
                 clientMap = False
+
+            # Start the timer (45ms callback feature)
+            signal.setitimer(signal.ITIMER_REAL, 0.45)
 
             # Prepare for the rdt_receive sequence to initiate
             receiveMap = True
@@ -144,7 +186,7 @@ def clientActivity(connection, progress, name, pathWay, errorPercentage, lossPer
             counter = 0
 
             # RDT_RECEIVE functionality
-            if not (len(list) == 0):
+            if not (len(list) == 0) or safety:
                 while receiveMap:
                     output, serverAddress = clientSocket.recvfrom(buf)
                     # Inject potential ACK packet "loss" into the client system
@@ -152,33 +194,43 @@ def clientActivity(connection, progress, name, pathWay, errorPercentage, lossPer
                         lossMapACK = injectLoss(lossPercentage)
                     packet = sortData(output)
                     # Inject error into the incoming ACK
-                    packet["ACK"] = injectError(packet["ACK"], errorPercentage)
+                    packet["ACK"], fake = injectError(packet["ACK"], errorPercentage)
                     # converted ACK into an integer
                     packet["ACK_Int"] = int.from_bytes(packet["ACK"], byteorder="little")
+                    if safety:
+                        progressValue += 1
                     # State Jumper
                     ackChecksum = generateChecksum(packet["ACK_Int"], packet["SN"], i, False)
                     if verifyChecksum(packet["Checksum"], ackChecksum):  # Is the checksum valid?
                         counter += 1
-                        progressValue += 1
-                        if counter == 10:
+                        if not safety:
+                            progressValue += 1
+                        if counter == N:
                             # Stop the timer/alarm, as the final ACK has been received
                             signal.alarm(0)
                             receiveMap = False
                         # ACK the from the current window sequence, as it has been verified as sent
-                        list.remove(packet["SN"])
-                        mailBox.put("State " + str(packet["SN"]) + ": Received Packet\n")
+                        if not safety:
+                            list.remove(packet["SN"])
+                        mailBox.put("State " + str(packet["SN"]) + ": Received ACK\n")
                         progressBox.put(math.floor((progressValue / i) * 100))
                         # Break when the sequence ends completely
-                        if len(list) == 0:
-                            signal.alarm(0)
-                            finalTime = datetime.datetime.now()
-                            mailBox.put("... Image finished sending\n")
-                            clientMap = False
-                            receiveMap = False
+                        if not safety:
+                            if len(list) == 0:
+                                signal.alarm(0)
+                                finalTime = datetime.datetime.now()
+                                mailBox.put("... Image finished sending\n")
+                                clientMap = False
+                                receiveMap = False
             else:
                 clientMap = False
         except TypeError:
-            pass  # Go back, and send the old data again, after the timer is stopped
+            # Go back, and send the old data again, after the timer is stopped
+            if safety:  # Removes the safety of the system, and allows it to progress without all ACK
+                if len(list) == 0:
+                    finalTime = datetime.datetime.now()
+                    mailBox.put("... Image finished sending\n")
+                    clientMap = False
             # If all fail, then send the packet of data again, nothing in the sequence advances forward
     finishTime = finalTime - initialTime
     mailBox.put("Finish time: " + str(finishTime) + "\n")
@@ -203,7 +255,8 @@ def onClick():
         # Start multiprocessing the background activity of the server application
         signal.signal(signal.SIGALRM, clientActivity)  # child activity handles the alarm signal call
         process = multiprocessing.Process(target=clientActivity, args=(queue, progressQueue, serverName, imagePath,
-                                                                       int(errorSpinner.get()), int(lossSpinner.get())))
+                                                                       int(errorSpinner.get()), int(lossSpinner.get()),
+                                                                       recoveryValue.get(), int(nSpinner.get())))
         process.start()
 
 
@@ -271,7 +324,8 @@ def injectError(information, error):
         injection = bin(injection)
         injection = int(injection.translate(str.maketrans("10", "01"))[2:], 2)
         information = injection.to_bytes(1024, byteorder="little")
-    return information
+        return information, True
+    return information, False
 
 
 # A simple function call that, using probability, determines if a received ack "exists" or not

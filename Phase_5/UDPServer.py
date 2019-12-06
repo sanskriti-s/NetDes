@@ -78,13 +78,16 @@ def serverActivity(connection, relay):
                 ackChecksum = ackCheckInt.to_bytes(4, byteorder="little")
                 switchback = packet["SN"].to_bytes(3, byteorder="little") + ackChecksum + ack
                 serverSocket.sendto(switchback, clientAddress)
-                if len(message) == packet["Total_Collection"]:
+                if len(message) >= packet["Total_Collection"]:
                     receiveFile = False
 
         # Order the message into a single variable
-        orderedMessage = b""
-        for x in range(packet["Total_Collection"] - 1):
-            orderedMessage += message[str(x)]
+        try:
+            orderedMessage = b""
+            for x in range(packet["Total_Collection"] - 1):
+                orderedMessage += message[str(x)]
+        except KeyError:
+            pass  # In call cases, let this pass so the error message can be invoked
 
         pictureBox.put(orderedMessage)
 
@@ -162,8 +165,11 @@ def collectUpdate():
             stateLog.insert(tk.END, queue.get())
             stateLog.yview(tk.END)
         if not imageQueue.empty():
-            imageObject = ImageTk.PhotoImage(Image.open(io.BytesIO(imageQueue.get())))
-            imageLabel.config(image=imageObject)
+            try:
+                imageObject = ImageTk.PhotoImage(Image.open(io.BytesIO(imageQueue.get())))
+                imageLabel.config(image=imageObject)
+            except OSError:
+                pass
     # Look for updates continuously from the other process (after 100ms) [this type of callback prevents recursion]
     rootView.after(100, collectUpdate)
 
