@@ -45,9 +45,9 @@ imageLabel.grid(column=0, row=8)
 def serverActivity(connection, relay):
     mailBox = connection
     pictureBox = relay
-    # The server port and buffer are set to the same as what's within the client
-    serverPort = 12001
     buf = 1035
+    # The server port is set to the same as what's within the client
+    serverPort = 12000
     # The UDP socket is created same as the client.
     # AF_INET indicates that the underlying network is using IPv4.
     # SOCK_STREAM means it is a TCP socket

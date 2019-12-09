@@ -94,7 +94,7 @@ def clientActivity(connection, progress, name, pathWay, errorPercentage, lossPer
     # SOCK_STREAM means it is a TCP socket
     clientSocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     # Server Port chosen arbitrarily
-    serverPort = 12001
+    serverPort = 12000
     # Buffer size set to 1035 bytes
     buf = 1035
     # Connect to the TCPServer
@@ -121,7 +121,6 @@ def clientActivity(connection, progress, name, pathWay, errorPercentage, lossPer
 
     clientMap = True
     progressValue = 0
-    tripleACK = 1
     threshold = 1
     # Variables for dynamic timeout windows
     EstimatedRTT = 1
@@ -178,8 +177,8 @@ def clientActivity(connection, progress, name, pathWay, errorPercentage, lossPer
                         clientSocket.sendall(data)
                         if nextSequenceNumber == 0:
                             sampleStart = datetime.datetime.now()
-                            # Set the timeout dynamically
-                            signal.setitimer(signal.ITIMER_REAL, (EstimatedRTT + (4 * DevRTT)))
+                    # Set the timeout dynamically
+                    signal.setitimer(signal.ITIMER_REAL, (EstimatedRTT + (4 * DevRTT)))
                     # Removes the safety feature that the list provides for the user
                     if safety:
                         list.remove(int.from_bytes(sequenceNumber, byteorder="little"))
@@ -196,7 +195,6 @@ def clientActivity(connection, progress, name, pathWay, errorPercentage, lossPer
 
             # Prepare for the rdt_receive sequence to initiate
             receiveMap = True
-            lossMapACK = True
             counter = 0
 
             # RDT_RECEIVE functionality
@@ -204,62 +202,68 @@ def clientActivity(connection, progress, name, pathWay, errorPercentage, lossPer
                 while receiveMap:
                     output = clientSocket.recv(buf)
                     # Inject potential ACK packet "loss" into the client system
-                    while lossMapACK:
-                        lossMapACK = injectLoss(lossPercentage)
-                    packet = sortData(output)
-                    # Inject error into the incoming ACK
-                    packet["ACK"], fake = injectError(packet["ACK"], errorPercentage)
-                    # converted ACK into an integer
-                    packet["ACK_Int"] = int.from_bytes(packet["ACK"], byteorder="little")
-                    if safety:
-                        progressValue += 1
-                        window += 1
-                    # State Jumper
-                    ackChecksum = generateChecksum(packet["ACK_Int"], packet["SN"], i, False)
-                    if verifyChecksum(packet["Checksum"], ackChecksum):  # Is the checksum valid?
-                        counter += 1
-                        if not safety:
+                    lossMapACK = injectLoss(lossPercentage)
+                    if not lossMapACK:
+                        packet = sortData(output)
+                        # Inject error into the incoming ACK
+                        packet["ACK"], fake = injectError(packet["ACK"], errorPercentage)
+                        # converted ACK into an integer
+                        packet["ACK_Int"] = int.from_bytes(packet["ACK"], byteorder="little")
+                        if safety:
                             progressValue += 1
-                        if counter == N:
-                            # Stop the timer/alarm, as the final ACK has been received
-                            signal.alarm(0)
-                            receiveMap = False
-                            # Update the current RTT
-                            SampleRTT = datetime.datetime.now() - sampleStart
-                            EstimatedRTT = (1-α)*EstimatedRTT + (α * SampleRTT.total_seconds())
-                            DevRTT = (1-β)*DevRTT + (β * abs(SampleRTT.total_seconds() - EstimatedRTT))
                             window += 1
-                        else:
+                        # State Jumper
+                        ackChecksum = generateChecksum(packet["ACK_Int"], packet["SN"], i, False)
+                        if verifyChecksum(packet["Checksum"], ackChecksum):  # Is the checksum valid?
                             # End all alarms engaged
                             signal.alarm(0)
-                            # Handle the dynamic window sizes with the threshold limit engaged
-                            if window < threshold:
-                                window += 1
-                            # Restart the timer
-                            signal.setitimer(signal.ITIMER_REAL, (EstimatedRTT + (4 * DevRTT)))
-                        # Remove the data packet the from the current window sequence, as it has been verified as sent
-                        if not safety:
-                            try:
-                                list.remove(packet["SN"])
-                            except ValueError:  # ignore when attempts are made to remove items due to repeat ACKs
-                                # Handling for the triple ACK scenario
-                                tripleACK += 1
-                        # The triple ACK scenario in action
-                        if tripleACK == 3:
-                            signal.alarm(0)
-                            tripleACK = 1
-                            raise TypeError
-                        # Update to the user what is occurring in approx. real time
-                        mailBox.put("State " + str(packet["SN"]) + ": Received ACK\n")
-                        progressBox.put(math.floor((progressValue / i) * 100))
-                        # Break when the sequence ends completely
-                        if not safety:
-                            if len(list) == 0:
-                                signal.alarm(0)
-                                finalTime = datetime.datetime.now()
-                                mailBox.put("... Image finished sending\n")
-                                clientMap = False
+                            counter += 1
+                            if not safety:
+                                progressValue += 1
+                            if counter == N:
                                 receiveMap = False
+                                # Update the current RTT
+                                SampleRTT = datetime.datetime.now() - sampleStart
+                                EstimatedRTT = (1-α)*EstimatedRTT + (α * SampleRTT.total_seconds())
+                                DevRTT = (1-β)*DevRTT + (β * abs(SampleRTT.total_seconds() + - EstimatedRTT))
+                                # Limit how fast the connection can go, as to not overwhelm the channel and miss ACKs
+                                if (EstimatedRTT + (4 * DevRTT)) < 0.05:
+                                    EstimatedRTT = 0.05
+                                    DevRTT = 0
+                                window += 1
+                            else:
+                                # Handle the dynamic window sizes with the threshold limit engaged
+                                if window < threshold:
+                                    window += 1
+                                # Update the current RTT
+                                SampleRTT = datetime.datetime.now() - sampleStart
+                                EstimatedRTT = (1 - α) * EstimatedRTT + (α * SampleRTT.total_seconds())
+                                DevRTT = (1 - β) * DevRTT + (β * abs(SampleRTT.total_seconds() - EstimatedRTT))
+                                # Limit how fast the connection can go, as to not overwhelm the channel and miss ACKs
+                                if (EstimatedRTT + (4 * DevRTT)) < 0.05:
+                                    EstimatedRTT = 0.05
+                                    DevRTT = 0
+                                sampleStart = datetime.datetime.now()
+                                # Restart the timer
+                                signal.setitimer(signal.ITIMER_REAL, (EstimatedRTT + (4 * DevRTT)))
+                            # Remove the data packet the from the current window sequence, as it has been verified as
+                            # sent
+                            if not safety:
+                                try:
+                                    list.remove(packet["SN"])
+                                except ValueError:  # ignore when attempts are made to remove items due to repeat ACKs
+                                    pass
+                            # Update to the user what is occurring in approx. real time
+                            mailBox.put("State " + str(packet["SN"]) + ": Received ACK\n")
+                            progressBox.put(math.floor((progressValue / i) * 100))
+                            # Break when the sequence ends completely
+                            if not safety:
+                                if len(list) == 0:
+                                    signal.alarm(0)
+                                    finalTime = datetime.datetime.now()
+                                    mailBox.put("... Image finished sending\n")
+                                    clientMap = False
+                                    receiveMap = False
             else:
                 clientMap = False
         except TypeError:
