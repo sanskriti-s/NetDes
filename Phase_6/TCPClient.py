@@ -121,7 +121,8 @@ def clientActivity(connection, progress, name, pathWay, errorPercentage, lossPer
 
     clientMap = True
     progressValue = 0
-    threshold = math.ceil(window / 2)
+    tripleACK = 1
+    threshold = 1
     # Variables for dynamic timeout windows
     EstimatedRTT = 1
     DevRTT = 0
@@ -132,7 +133,7 @@ def clientActivity(connection, progress, name, pathWay, errorPercentage, lossPer
     initialTime = datetime.datetime.now()
     while clientMap:
         # Dynamically set the value of N for congestion control purposes
-        N = value
+        N = window
         try:
             if not (len(list) == 0):
                 nextSequenceNumber = 0
@@ -231,16 +232,24 @@ def clientActivity(connection, progress, name, pathWay, errorPercentage, lossPer
                         else:
                             # End all alarms engaged
                             signal.alarm(0)
+                            # Handle the dynamic window sizes with the threshold limit engaged
+                            if window < threshold:
+                                window += 1
                             # Restart the timer
                             signal.setitimer(signal.ITIMER_REAL, (EstimatedRTT + (4 * DevRTT)))
-                            if window <= threshold:
-                                window += 1
                         # Remove the data packet the from the current window sequence, as it has been verified as sent
                         if not safety:
                             try:
                                 list.remove(packet["SN"])
                             except ValueError:  # ignore when attempts are made to remove items due to repeat ACKs
-                                pass
+                                # Handling for the triple ACK scenario
+                                tripleACK += 1
+                        # The triple ACK scenario in action
+                        if tripleACK == 3:
+                            signal.alarm(0)
+                            tripleACK = 1
+                            raise TypeError
+                        # Update to the user what is occurring in approx. real time
                         mailBox.put("State " + str(packet["SN"]) + ": Received ACK\n")
                         progressBox.put(math.floor((progressValue / i) * 100))
                         # Break when the sequence ends completely
@@ -254,8 +263,9 @@ def clientActivity(connection, progress, name, pathWay, errorPercentage, lossPer
             else:
                 clientMap = False
         except TypeError:
-            threshold = math.ceil(window / 2)
-            window = math.floor(window / 4)  # Go back, and send the old data again, after the timer is stopped
+            # Go back, and send the old data again, after the timer is stopped
+            threshold = math.floor(window / 2)
+            window = threshold + 1
             if safety:  # Removes the safety of the system, and allows it to progress without all ACK
                 if len(list) == 0:
                     finalTime = datetime.datetime.now()
