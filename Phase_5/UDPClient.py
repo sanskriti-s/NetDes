@@ -234,7 +234,7 @@ def clientActivity(connection, progress, name, pathWay, errorPercentage, lossPer
             # If all fail, then send the packet of data again, nothing in the sequence advances forward
     finishTime = finalTime - initialTime
     mailBox.put("Finish time: " + str(finishTime) + "\n")
-    mailBox.put("----------------------------------------")
+    mailBox.put("----------------------------------------\n")
     progressBox.put(0)
     # Close and end the process in progress
     clientSocket.close()

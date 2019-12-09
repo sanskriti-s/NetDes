@@ -19,6 +19,7 @@ import math
 rootView = tk.Tk()
 rootView.title("Client Package")
 rootView.geometry("525x550")
+# NOTE: FLOW CONTROL ON PAGE 291
 
 # Creates a top label explaining instructions
 topLabel = tk.Label(rootView, text="If you are unsure of server hostname or IP please see info in server window.")
@@ -86,13 +87,14 @@ recoveryBox.grid(column=0, row=32)
 def clientActivity(connection, progress, name, pathWay, errorPercentage, lossPercentage, safety, value):
     mailBox = connection
     progressBox = progress
+    window = value
     # The UDP socket is created.
     # The UDP socket is created same as the client.
     # AF_INET indicates that the underlying network is using IPv4.
     # SOCK_STREAM means it is a TCP socket
     clientSocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     # Server Port chosen arbitrarily
-    serverPort = 12000
+    serverPort = 12001
     # Buffer size set to 1035 bytes
     buf = 1035
     # Connect to the TCPServer
@@ -118,8 +120,16 @@ def clientActivity(connection, progress, name, pathWay, errorPercentage, lossPer
         list.append(x)
 
     clientMap = True
-    initialTime = datetime.datetime.now()
     progressValue = 0
+    threshold = math.ceil(window / 2)
+    # Variables for dynamic timeout windows
+    EstimatedRTT = 1
+    DevRTT = 0
+    sampleStart = 0
+    α = 0.125
+    β = 0.25
+    # Start timing the whole sequence of events
+    initialTime = datetime.datetime.now()
     while clientMap:
         # Dynamically set the value of N for congestion control purposes
         N = value
@@ -165,6 +175,10 @@ def clientActivity(connection, progress, name, pathWay, errorPercentage, lossPer
                             data = sequenceNumber + finalSN + checksum + messageModed
                     if not lossMap:
                         clientSocket.sendall(data)
+                        if nextSequenceNumber == 0:
+                            sampleStart = datetime.datetime.now()
+                            # Set the timeout dynamically
+                            signal.setitimer(signal.ITIMER_REAL, (EstimatedRTT + (4 * DevRTT)))
                     # Removes the safety feature that the list provides for the user
                     if safety:
                         list.remove(int.from_bytes(sequenceNumber, byteorder="little"))
@@ -178,9 +192,6 @@ def clientActivity(connection, progress, name, pathWay, errorPercentage, lossPer
                         nextSequenceNumber += 1
             else:
                 clientMap = False
-
-            # Start the timer (1s callback feature)
-            clientSocket.settimeout(1)
 
             # Prepare for the rdt_receive sequence to initiate
             receiveMap = True
@@ -201,21 +212,35 @@ def clientActivity(connection, progress, name, pathWay, errorPercentage, lossPer
                     packet["ACK_Int"] = int.from_bytes(packet["ACK"], byteorder="little")
                     if safety:
                         progressValue += 1
-                        value += 1
+                        window += 1
                     # State Jumper
                     ackChecksum = generateChecksum(packet["ACK_Int"], packet["SN"], i, False)
                     if verifyChecksum(packet["Checksum"], ackChecksum):  # Is the checksum valid?
                         counter += 1
                         if not safety:
                             progressValue += 1
-                            value += 1
                         if counter == N:
                             # Stop the timer/alarm, as the final ACK has been received
                             signal.alarm(0)
                             receiveMap = False
-                        # ACK the from the current window sequence, as it has been verified as sent
+                            # Update the current RTT
+                            SampleRTT = datetime.datetime.now() - sampleStart
+                            EstimatedRTT = (1-α)*EstimatedRTT + (α * SampleRTT.total_seconds())
+                            DevRTT = (1-β)*DevRTT + (β * abs(SampleRTT.total_seconds() - EstimatedRTT))
+                            window += 1
+                        else:
+                            # End all alarms engaged
+                            signal.alarm(0)
+                            # Restart the timer
+                            signal.setitimer(signal.ITIMER_REAL, (EstimatedRTT + (4 * DevRTT)))
+                            if window <= threshold:
+                                window += 1
+                        # Remove the data packet the from the current window sequence, as it has been verified as sent
                         if not safety:
-                            list.remove(packet["SN"])
+                            try:
+                                list.remove(packet["SN"])
+                            except ValueError:  # ignore when attempts are made to remove items due to repeat ACKs
+                                pass
                         mailBox.put("State " + str(packet["SN"]) + ": Received ACK\n")
                         progressBox.put(math.floor((progressValue / i) * 100))
                         # Break when the sequence ends completely
@@ -228,8 +253,9 @@ def clientActivity(connection, progress, name, pathWay, errorPercentage, lossPer
                                 receiveMap = False
             else:
                 clientMap = False
-        except Exception:
-            value /= 2  # Go back, and send the old data again, after the timer is stopped
+        except TypeError:
+            threshold = math.ceil(window / 2)
+            window = math.floor(window / 4)  # Go back, and send the old data again, after the timer is stopped
             if safety:  # Removes the safety of the system, and allows it to progress without all ACK
                 if len(list) == 0:
                     finalTime = datetime.datetime.now()
@@ -238,7 +264,7 @@ def clientActivity(connection, progress, name, pathWay, errorPercentage, lossPer
             # If all fail, then send the packet of data again, nothing in the sequence advances forward
     finishTime = finalTime - initialTime
     mailBox.put("Finish time: " + str(finishTime) + "\n")
-    mailBox.put("----------------------------------------")
+    mailBox.put("----------------------------------------\n")
     progressBox.put(0)
     # Close and end the process in progress
     clientSocket.close()

@@ -46,7 +46,7 @@ def serverActivity(connection, relay):
     mailBox = connection
     pictureBox = relay
     # The server port and buffer are set to the same as what's within the client
-    serverPort = 12000
+    serverPort = 12001
     buf = 1035
     # The UDP socket is created same as the client.
     # AF_INET indicates that the underlying network is using IPv4.
