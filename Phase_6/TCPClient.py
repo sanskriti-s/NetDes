@@ -18,7 +18,7 @@ import math
 # Creates a new window interface and labels it
 rootView = tk.Tk()
 rootView.title("Client Package")
-rootView.geometry("525x550")
+rootView.geometry("525x650")
 # NOTE: FLOW CONTROL ON PAGE 291
 
 # Creates a top label explaining instructions
@@ -35,29 +35,41 @@ hostNameView = tk.Entry(rootView, width=20)
 hostNameView.grid(column=0, row=6)
 hostNameView.focus()
 
-# Creates a label and a spinner object to choose the error level in the GUI
+# Creates a label and a spinner object to choose the error level (SEND) in the GUI
 spinnerLabel = tk.Label(rootView, text="Choose data error percentage below:")
 spinnerLabel.grid(column=0, row=16)
 errorSpinner = tk.Spinbox(rootView, from_=0, to=99, width=5)
 errorSpinner.grid(column=0, row=18)
 
-# Creates a label and a spinner object to choose the loss level in the GUI
+# Creates a label and a spinner object to choose the error level (RECEIVE) in the GUI
+spinnerRECLabel = tk.Label(rootView, text="Choose data error (RECEIVE) percentage below:")
+spinnerRECLabel.grid(column=0, row=20)
+errorRECSpinner = tk.Spinbox(rootView, from_=0, to=99, width=5)
+errorRECSpinner.grid(column=0, row=22)
+
+# Creates a label and a spinner object to choose the loss level (SEND) in the GUI
 lossLabel = tk.Label(rootView, text="Choose data loss percentage below:")
-lossLabel.grid(column=0, row=20)
+lossLabel.grid(column=0, row=24)
 lossSpinner = tk.Spinbox(rootView, from_=0, to=99, width=5)
-lossSpinner.grid(column=0, row=22)
+lossSpinner.grid(column=0, row=26)
+
+# Creates a label and a spinner object to choose the loss level (RECEIVE) in the GUI
+lossRECLabel = tk.Label(rootView, text="Choose data loss (RECEIVE) percentage below:")
+lossRECLabel.grid(column=0, row=28)
+lossRECSpinner = tk.Spinbox(rootView, from_=0, to=99, width=5)
+lossRECSpinner.grid(column=0, row=30)
 
 # Creates a label and a spinner object to choose the window size in the GUI
 nLabel = tk.Label(rootView, text="Select sending window size (N) below:")
-nLabel.grid(column=0, row=24)
+nLabel.grid(column=0, row=32)
 nValue = tk.StringVar(rootView)
 nValue.set("1")
 nSpinner = tk.Spinbox(rootView, from_=1, to=100, width=5, textvariable=nValue)
-nSpinner.grid(column=0, row=26)
+nSpinner.grid(column=0, row=34)
 
 # Creates a state/message log in the GUI
 stateLog = scrolledtext.ScrolledText(rootView, width=60, height=10)
-stateLog.grid(column=0, row=28)
+stateLog.grid(column=0, row=36)
 stateLog.insert(tk.END, "Client State Log:\n")
 
 # Set-up for multiprocessing communication support
@@ -74,31 +86,30 @@ imageLabel.grid(column=0, row=10)
 
 # Creates a progress bar to show the state of the transfer
 progressBar = Progressbar(rootView, length=400)
-progressBar.grid(column=0, row=30)
+progressBar.grid(column=0, row=38)
 
 # Creates a checkbox for REMOVING data loss features in this program
 recoveryValue = tk.BooleanVar()
 recoveryValue.set(False)
 recoveryBox = tk.Checkbutton(rootView, text="No Loss Recovery?", var=recoveryValue)
-recoveryBox.grid(column=0, row=32)
+recoveryBox.grid(column=0, row=40)
 
 
 # Function serving as the point for the thread that will do the background work behind the GUI
-def clientActivity(connection, progress, name, pathWay, errorPercentage, lossPercentage, safety, value):
+def clientActivity(connection, progress, name, pathWay, errorPercentageSEND,
+                   errorPercentageREC, lossPercentageSEND, lossPercentageREC, safety, value):
     mailBox = connection
     progressBox = progress
     window = value
     # The UDP socket is created.
     # The UDP socket is created same as the client.
     # AF_INET indicates that the underlying network is using IPv4.
-    # SOCK_STREAM means it is a TCP socket
-    clientSocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    # SOCK_DGRAM means it is a UDP socket
+    clientSocket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     # Server Port chosen arbitrarily
     serverPort = 12000
     # Buffer size set to 1035 bytes
     buf = 1035
-    # Connect to the TCPServer
-    clientSocket.connect((name, serverPort))
     mailBox.put("Beginning to send image data...\n")
     progressBox.put(0)
     # Initialize an empty list for the image data, along with the necessary variables to control it
@@ -122,6 +133,7 @@ def clientActivity(connection, progress, name, pathWay, errorPercentage, lossPer
     clientMap = True
     progressValue = 0
     threshold = 1
+    messageTime = 0
     # Variables for dynamic timeout windows
     EstimatedRTT = 1
     DevRTT = 0
@@ -130,6 +142,9 @@ def clientActivity(connection, progress, name, pathWay, errorPercentage, lossPer
     β = 0.25
     # Start timing the whole sequence of events
     initialTime = datetime.datetime.now()
+
+    # TODO: Manually create "TCP" connection establishment
+
     while clientMap:
         # Dynamically set the value of N for congestion control purposes
         N = window
@@ -156,17 +171,17 @@ def clientActivity(connection, progress, name, pathWay, errorPercentage, lossPer
                     checksum = checksumInt.to_bytes(4, byteorder="little")
                     if safety:
                         # Inject error into the outgoing message to the server
-                        messageModed, truth = injectError(message[list[0]], errorPercentage)
+                        messageModed, truth = injectError(message[list[0]], errorPercentageSEND)
                         if truth:
                             i -= 1
                             finalSN = i.to_bytes(4, byteorder="little")
                     else:
                         # Inject error into the outgoing message to the server
-                        messageModed, fake = injectError(message[list[nextSequenceNumber]], errorPercentage)
+                        messageModed, fake = injectError(message[list[nextSequenceNumber]], errorPercentageSEND)
                     # The packet is then prepared and sent via the client socket
                     data = sequenceNumber + finalSN + checksum + messageModed
                     # Inject potential packet "loss" into the client system
-                    lossMap = injectLoss(lossPercentage)
+                    lossMap = injectLoss(lossPercentageSEND)
                     # Ignore packet loss when safety features are removed by the user
                     if lossMap:
                         if safety:
@@ -174,7 +189,7 @@ def clientActivity(connection, progress, name, pathWay, errorPercentage, lossPer
                             finalSN = i.to_bytes(4, byteorder="little")
                             data = sequenceNumber + finalSN + checksum + messageModed
                     if not lossMap:
-                        clientSocket.sendall(data)
+                        clientSocket.sendto(data, (name, serverPort))
                         if nextSequenceNumber == 0:
                             sampleStart = datetime.datetime.now()
                     # Set the timeout dynamically
@@ -182,9 +197,13 @@ def clientActivity(connection, progress, name, pathWay, errorPercentage, lossPer
                     # Removes the safety feature that the list provides for the user
                     if safety:
                         list.remove(int.from_bytes(sequenceNumber, byteorder="little"))
+                        quickTime = datetime.datetime.now()
                         mailBox.put("State " + str(int.from_bytes(sequenceNumber, byteorder="little")) + ": Sending\n")
+                        messageTime += (datetime.datetime.now() - quickTime).total_seconds()
                     else:
+                        quickTime = datetime.datetime.now()
                         mailBox.put("State " + str(list[nextSequenceNumber]) + ": Sending\n")
+                        messageTime += (datetime.datetime.now() - quickTime).total_seconds()
                     # Exit the loop, or keep going?
                     if (nextSequenceNumber == len(list) - 1) or (len(list) == 0):
                         nextSequenceNumber = N
@@ -200,13 +219,13 @@ def clientActivity(connection, progress, name, pathWay, errorPercentage, lossPer
             # RDT_RECEIVE functionality
             if not (len(list) == 0) or safety:
                 while receiveMap:
-                    output = clientSocket.recv(buf)
+                    output, serverAddress = clientSocket.recvfrom(buf)
                     # Inject potential ACK packet "loss" into the client system
-                    lossMapACK = injectLoss(lossPercentage)
+                    lossMapACK = injectLoss(lossPercentageREC)
                     if not lossMapACK:
                         packet = sortData(output)
                         # Inject error into the incoming ACK
-                        packet["ACK"], fake = injectError(packet["ACK"], errorPercentage)
+                        packet["ACK"], fake = injectError(packet["ACK"], errorPercentageREC)
                         # converted ACK into an integer
                         packet["ACK_Int"] = int.from_bytes(packet["ACK"], byteorder="little")
                         if safety:
@@ -254,8 +273,12 @@ def clientActivity(connection, progress, name, pathWay, errorPercentage, lossPer
                                 except ValueError:  # ignore when attempts are made to remove items due to repeat ACKs
                                     pass
                             # Update to the user what is occurring in approx. real time
+                            quickTime = datetime.datetime.now()
                             mailBox.put("State " + str(packet["SN"]) + ": Received ACK\n")
+                            messageTime += (datetime.datetime.now() - quickTime).total_seconds()
+                            quickTime = datetime.datetime.now()
                             progressBox.put(math.floor((progressValue / i) * 100))
+                            messageTime += (datetime.datetime.now() - quickTime).total_seconds()
                             # Break when the sequence ends completely
                             if not safety:
                                 if len(list) == 0:
@@ -275,8 +298,8 @@ def clientActivity(connection, progress, name, pathWay, errorPercentage, lossPer
                     finalTime = datetime.datetime.now()
                     mailBox.put("... Image finished sending\n")
                     clientMap = False
-            # If all fail, then send the packet of data again, nothing in the sequence advances forward
-    finishTime = finalTime - initialTime
+            # If all fails, then send the packet of data again, nothing in the sequence advances forward
+    finishTime = (finalTime - initialTime).total_seconds() - messageTime
     mailBox.put("Finish time: " + str(finishTime) + "\n")
     mailBox.put("----------------------------------------\n")
     progressBox.put(0)
@@ -299,7 +322,10 @@ def onClick():
         # Start multiprocessing the background activity of the server application
         signal.signal(signal.SIGALRM, clientActivity)  # child activity handles the alarm signal call
         process = multiprocessing.Process(target=clientActivity, args=(queue, progressQueue, serverName, imagePath,
-                                                                       int(errorSpinner.get()), int(lossSpinner.get()),
+                                                                       int(errorSpinner.get()),
+                                                                       int(errorRECSpinner.get()),
+                                                                       int(lossSpinner.get()),
+                                                                       int(lossRECSpinner.get()),
                                                                        recoveryValue.get(), int(nSpinner.get())))
         process.start()
 
@@ -357,6 +383,7 @@ def sortData(data):
     dictionary["ACK"] = data[7:]  # message data received (1024 bytes long)
     return dictionary
 
+
 # A simple function call that injects data bit error and Ack error into the system intentionally
 # returns either the ack with error, or no error.
 def injectError(information, error):
@@ -381,6 +408,7 @@ def injectLoss(loss):
     if randomLoss < loss:
         return True
     return False
+
 
 # Checks if there is a message in the queue to update the GUI with for the action log or picture updater
 def collectUpdate():

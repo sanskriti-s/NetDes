@@ -50,22 +50,21 @@ def serverActivity(connection, relay):
     serverPort = 12000
     # The UDP socket is created same as the client.
     # AF_INET indicates that the underlying network is using IPv4.
-    # SOCK_STREAM means it is a TCP socket
-    serverSocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    # SOCK_DGRAM means it is a UDP socket
+    serverSocket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     # The port number 12000 is bound to the servers socket.
-    serverSocket.bind(('localhost', serverPort))
-    # Listen for incoming connections
-    serverSocket.listen()
+    serverSocket.bind(('', serverPort))
     ack = "ACK".encode("UTF-8")
     # Enters an indefinite loop
     while True:
         mailBox.put("Prepared to receive image data...\n")
         receiveFile = True
         message = {}
-        connection, clientAddress = serverSocket.accept()
+       # TODO: Manually create "TCP" connection establishment
+
         while receiveFile:
             # The message is received from the client and the client address is saved
-            output = connection.recv(buf)
+            output, clientAddress = serverSocket.recvfrom(buf)
             packet = sortData(output)
             # State Jumper
             # Check the output's checksum
@@ -78,7 +77,7 @@ def serverActivity(connection, relay):
                                                packet["Total_Collection"], True)
                 ackChecksum = ackCheckInt.to_bytes(4, byteorder="little")
                 switchback = packet["SN"].to_bytes(3, byteorder="little") + ackChecksum + ack
-                connection.sendall(switchback)
+                serverSocket.sendto(switchback, clientAddress)
                 if len(message) >= packet["Total_Collection"]:
                     receiveFile = False
 
