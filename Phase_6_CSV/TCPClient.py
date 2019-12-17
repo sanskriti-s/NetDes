@@ -14,6 +14,8 @@ import multiprocessing
 import random
 import datetime
 import math
+import numpy as np
+import csv
 
 # Creates a new window interface and labels it
 rootView = tk.Tk()
@@ -112,6 +114,13 @@ def clientActivity(connection, progress, name, pathWay, errorPercentageSEND,
     ack = "ACK".encode("UTF-8")
     ackValue = int.from_bytes(ack, byteorder="little")
     progressBox.put(0)
+
+    # Lists for Data Collection
+    N_data = ["Window Size"]
+    SampleRTT_data = ["SampleRTT"]
+    EstimatedRTT_data = ["EstimatedRTT"]
+    DevRTT_data = ["DevRTT"]
+
     # Initialize an empty list for the image data, along with the necessary variables to control it
     message = []
     list = []
@@ -179,6 +188,12 @@ def clientActivity(connection, progress, name, pathWay, errorPercentageSEND,
     mailBox.put("Beginning to send image data...\n")
     # Set the value the SYN value for the rest of the transmission
     SYN = (0).to_bytes(2, byteorder="little")
+
+    N_data.append(window)
+    SampleRTT_data.append(0)
+    EstimatedRTT_data.append(EstimatedRTT)
+    DevRTT_data.append(DevRTT)
+
     # Start timing the whole sequence of events
     initialTime = datetime.datetime.now()
 
@@ -281,6 +296,14 @@ def clientActivity(connection, progress, name, pathWay, errorPercentageSEND,
                                     SampleRTT = datetime.datetime.now() - sampleStart
                                     EstimatedRTT = (1 - α) * EstimatedRTT + (α * SampleRTT.total_seconds())
                                     DevRTT = (1 - β) * DevRTT + (β * abs(SampleRTT.total_seconds() + - EstimatedRTT))
+
+                                    quickTime = datetime.datetime.now()
+                                    N_data.append(window)
+                                    SampleRTT_data.append(SampleRTT.total_seconds())
+                                    EstimatedRTT_data.append(EstimatedRTT)
+                                    DevRTT_data.append(DevRTT)
+                                    messageTime += (datetime.datetime.now() - quickTime).total_seconds()
+
                                     window += 1
                                 else:
                                     # Handle the dynamic window sizes with the threshold limit engaged
@@ -292,6 +315,14 @@ def clientActivity(connection, progress, name, pathWay, errorPercentageSEND,
                                     DevRTT = (1 - β) * DevRTT + (β * abs(SampleRTT.total_seconds() - EstimatedRTT))
                                     sampleStart = datetime.datetime.now()
                                     # Restart the timer
+
+                                    quickTime = datetime.datetime.now()
+                                    N_data.append(window)
+                                    SampleRTT_data.append(SampleRTT.total_seconds())
+                                    EstimatedRTT_data.append(EstimatedRTT)
+                                    DevRTT_data.append(DevRTT)
+                                    messageTime += (datetime.datetime.now() - quickTime).total_seconds()
+
                                     signal.setitimer(signal.ITIMER_REAL, (EstimatedRTT + (4 * DevRTT)))
                                 # Remove the data packet the from current window sequence, as it has been verified as
                                 # sent
@@ -385,6 +416,15 @@ def clientActivity(connection, progress, name, pathWay, errorPercentageSEND,
     mailBox.put("Connection Closed\n")
     mailBox.put("----------------------------------------\n")
     progressBox.put(0)
+
+    # Data Saving to .csv file format
+    with open("Data.csv", "w", newline="") as myfile:
+        wr = csv.writer(myfile, quoting=csv.QUOTE_ALL)
+        wr.writerow(N_data)
+        wr.writerow(SampleRTT_data)
+        wr.writerow(EstimatedRTT_data)
+        wr.writerow(DevRTT_data)
+
     # Close and end the process in progress
     clientSocket.close()
 
