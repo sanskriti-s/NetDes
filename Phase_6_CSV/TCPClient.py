@@ -15,7 +15,7 @@ import random
 import datetime
 import math
 import numpy as np
-import csv
+import torch
 
 # Creates a new window interface and labels it
 rootView = tk.Tk()
@@ -116,10 +116,11 @@ def clientActivity(connection, progress, name, pathWay, errorPercentageSEND,
     progressBox.put(0)
 
     # Lists for Data Collection
-    N_data = ["Window Size"]
-    SampleRTT_data = ["SampleRTT"]
-    EstimatedRTT_data = ["EstimatedRTT"]
-    DevRTT_data = ["DevRTT"]
+    N_data = []
+    SampleRTT_data = []
+    EstimatedRTT_data = []
+    DevRTT_data = []
+    Time_data = []
 
     # Initialize an empty list for the image data, along with the necessary variables to control it
     message = []
@@ -193,6 +194,7 @@ def clientActivity(connection, progress, name, pathWay, errorPercentageSEND,
     SampleRTT_data.append(0)
     EstimatedRTT_data.append(EstimatedRTT)
     DevRTT_data.append(DevRTT)
+    Time_data.append(0)
 
     # Start timing the whole sequence of events
     initialTime = datetime.datetime.now()
@@ -302,6 +304,8 @@ def clientActivity(connection, progress, name, pathWay, errorPercentageSEND,
                                     SampleRTT_data.append(SampleRTT.total_seconds())
                                     EstimatedRTT_data.append(EstimatedRTT)
                                     DevRTT_data.append(DevRTT)
+                                    Time_data.append((datetime.datetime.now() - initialTime).total_seconds() -
+                                                     messageTime)
                                     messageTime += (datetime.datetime.now() - quickTime).total_seconds()
 
                                     window += 1
@@ -321,6 +325,8 @@ def clientActivity(connection, progress, name, pathWay, errorPercentageSEND,
                                     SampleRTT_data.append(SampleRTT.total_seconds())
                                     EstimatedRTT_data.append(EstimatedRTT)
                                     DevRTT_data.append(DevRTT)
+                                    Time_data.append((datetime.datetime.now() - initialTime).total_seconds() -
+                                                     messageTime)
                                     messageTime += (datetime.datetime.now() - quickTime).total_seconds()
 
                                     signal.setitimer(signal.ITIMER_REAL, (EstimatedRTT + (4 * DevRTT)))
@@ -418,12 +424,25 @@ def clientActivity(connection, progress, name, pathWay, errorPercentageSEND,
     progressBox.put(0)
 
     # Data Saving to .csv file format
-    with open("Data.csv", "w", newline="") as myfile:
-        wr = csv.writer(myfile, quoting=csv.QUOTE_ALL)
-        wr.writerow(N_data)
-        wr.writerow(SampleRTT_data)
-        wr.writerow(EstimatedRTT_data)
-        wr.writerow(DevRTT_data)
+    # Create tensors with list data
+    Ntensor = torch.IntTensor(N_data)
+    SampleRTTtensor = torch.FloatTensor(SampleRTT_data)
+    EstimatedRTTtensor = torch.FloatTensor(EstimatedRTT_data)
+    DevRTTtensor = torch.FloatTensor(DevRTT_data)
+    Timetensor = torch.FloatTensor(Time_data)
+    # Transpose each tensor
+    Ntensor.t()
+    SampleRTTtensor.t()
+    EstimatedRTTtensor.t()
+    DevRTTtensor.t()
+    Timetensor.t()
+    # Save to individual files, for later compiling
+    np.savetxt("WindowSize.csv", Ntensor.numpy(), delimiter=",")
+    np.savetxt("SampleRTT.csv", SampleRTTtensor.numpy(), delimiter=",")
+    np.savetxt("EstimatedRTT.csv", EstimatedRTTtensor.numpy(), delimiter=",")
+    np.savetxt("DevRTT.csv", DevRTTtensor.numpy(), delimiter=",")
+    np.savetxt("Time.csv", Timetensor.numpy(), delimiter=",")
+
 
     # Close and end the process in progress
     clientSocket.close()
