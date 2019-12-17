@@ -249,8 +249,8 @@ def clientActivity(connection, progress, name, pathWay, errorPercentageSEND,
                                     mailBox.put("... Image finished sending\n")
                                     clientMap = False
                                     receiveMap = False
-                    else:
-                        clientMap = False
+            else:
+                clientMap = False
         except TypeError:
             # Go back, and send the old data again, after the timer is stopped
             if safety:  # Removes the safety of the system, and allows it to progress without all ACK

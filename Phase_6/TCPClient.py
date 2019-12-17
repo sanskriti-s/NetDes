@@ -14,12 +14,12 @@ import multiprocessing
 import random
 import datetime
 import math
+import sys
 
 # Creates a new window interface and labels it
 rootView = tk.Tk()
 rootView.title("Client Package")
 rootView.geometry("525x650")
-# NOTE: FLOW CONTROL ON PAGE 291
 
 # Creates a top label explaining instructions
 topLabel = tk.Label(rootView, text="If you are unsure of server hostname or IP please see info in server window.")
@@ -42,7 +42,7 @@ errorSpinner = tk.Spinbox(rootView, from_=0, to=99, width=5)
 errorSpinner.grid(column=0, row=18)
 
 # Creates a label and a spinner object to choose the error level (RECEIVE) in the GUI
-spinnerRECLabel = tk.Label(rootView, text="Choose data error (RECEIVE) percentage below:")
+spinnerRECLabel = tk.Label(rootView, text="Choose ACK error percentage below:")
 spinnerRECLabel.grid(column=0, row=20)
 errorRECSpinner = tk.Spinbox(rootView, from_=0, to=99, width=5)
 errorRECSpinner.grid(column=0, row=22)
@@ -54,7 +54,7 @@ lossSpinner = tk.Spinbox(rootView, from_=0, to=99, width=5)
 lossSpinner.grid(column=0, row=26)
 
 # Creates a label and a spinner object to choose the loss level (RECEIVE) in the GUI
-lossRECLabel = tk.Label(rootView, text="Choose data loss (RECEIVE) percentage below:")
+lossRECLabel = tk.Label(rootView, text="Choose ACK loss percentage below:")
 lossRECLabel.grid(column=0, row=28)
 lossRECSpinner = tk.Spinbox(rootView, from_=0, to=99, width=5)
 lossRECSpinner.grid(column=0, row=30)
@@ -108,9 +108,10 @@ def clientActivity(connection, progress, name, pathWay, errorPercentageSEND,
     clientSocket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     # Server Port chosen arbitrarily
     serverPort = 12000
-    # Buffer size set to 1035 bytes
-    buf = 1035
-    mailBox.put("Beginning to send image data...\n")
+    # Buffer size set to 1039 bytes
+    buf = 1039
+    ack = "ACK".encode("UTF-8")
+    ackValue = int.from_bytes(ack, byteorder="little")
     progressBox.put(0)
     # Initialize an empty list for the image data, along with the necessary variables to control it
     message = []
@@ -127,7 +128,7 @@ def clientActivity(connection, progress, name, pathWay, errorPercentageSEND,
                 i -= 0
 
     # Create a list of what SN's will exist in this transfer
-    for x in range(i):
+    for x in range(1, i + 1):
         list.append(x)
 
     clientMap = True
@@ -140,10 +141,47 @@ def clientActivity(connection, progress, name, pathWay, errorPercentageSEND,
     sampleStart = 0
     α = 0.125
     β = 0.25
+
+    # Unset the FIN flag for the beginning of this process
+    FIN = (0).to_bytes(2, byteorder="little")
+
+    # Manually establish "TCP" connection
+    connectionMap = True
+    while connectionMap:
+        # Create the SYN-ACK Three-Way Handshake
+        # Third part of the process carries image data, and is handled after this initial sequence
+        SYN = (1).to_bytes(2, byteorder="little")
+        sequenceNumber = (0).to_bytes(3, byteorder="little")
+        checksum = generateChecksum(0, 0, i, 1, 0, True).to_bytes(4, byteorder="little")
+        data = SYN + FIN + sequenceNumber + i.to_bytes(4, byteorder="little") + checksum + b''
+        clientSocket.sendto(data, (name, serverPort))
+        try:
+            # Start a timer to see and wait for an ACK from the server (1s delay)
+            # signal.setitimer(signal.ITIMER_REAL, 1)
+            # Wait for an appropriate ACK back from the server
+            output, serverAddress = clientSocket.recvfrom(buf)
+            packet = sortData(output)
+            # Verify the packet of data
+            ackChecksum = generateChecksum(packet["ACK_Int"], packet["SN"], i, packet["SYN"], packet["FIN"], False)
+            if verifyChecksum(packet["Checksum"], ackChecksum):
+                if packet["SYN"] == 1:
+                    if packet["FIN"] == 0:
+                        if packet["SN"] == 0:
+                            if packet["ACK_Int"] == 1:
+                                # Turn off the alarm, since the ACK back is valid
+                                signal.alarm(0)
+                                # Break out of the connection loop
+                                connectionMap = False
+        except TypeError:  # go back and send for the connection request again
+            pass
+
+    # Tell the user that a connection has been established
+    mailBox.put("Connection Established\n")
+    mailBox.put("Beginning to send image data...\n")
+    # Set the value the SYN value for the rest of the transmission
+    SYN = (0).to_bytes(2, byteorder="little")
     # Start timing the whole sequence of events
     initialTime = datetime.datetime.now()
-
-    # TODO: Manually create "TCP" connection establishment
 
     while clientMap:
         # Dynamically set the value of N for congestion control purposes
@@ -156,13 +194,13 @@ def clientActivity(connection, progress, name, pathWay, errorPercentageSEND,
                     if safety:
                         checksumInt = generateChecksum(
                             int.from_bytes(message[list[0]], byteorder="little"),
-                            list[0], i, True)
+                            list[0], i, 0, 0, True)
                         # Change the sequence number into a suitable bytes item for transport (3x2 bytes long)
                         sequenceNumber = list[0].to_bytes(3, byteorder="little")
                     else:
                         checksumInt = generateChecksum(
-                            int.from_bytes(message[list[nextSequenceNumber]], byteorder="little"),
-                            list[nextSequenceNumber], i, True)
+                            int.from_bytes(message[list[nextSequenceNumber] - 1], byteorder="little"),
+                            list[nextSequenceNumber], i, 0, 0, True)
                         # Change the sequence number into a suitable bytes item for transport (3x2 bytes long)
                         sequenceNumber = list[nextSequenceNumber].to_bytes(3, byteorder="little")
                     # Change the integer for the total number of packets in the image to a bytes item (4x2 bytes long)
@@ -177,9 +215,9 @@ def clientActivity(connection, progress, name, pathWay, errorPercentageSEND,
                             finalSN = i.to_bytes(4, byteorder="little")
                     else:
                         # Inject error into the outgoing message to the server
-                        messageModed, fake = injectError(message[list[nextSequenceNumber]], errorPercentageSEND)
+                        messageModed, fake = injectError(message[list[nextSequenceNumber] - 1], errorPercentageSEND)
                     # The packet is then prepared and sent via the client socket
-                    data = sequenceNumber + finalSN + checksum + messageModed
+                    data = SYN + FIN + sequenceNumber + finalSN + checksum + messageModed
                     # Inject potential packet "loss" into the client system
                     lossMap = injectLoss(lossPercentageSEND)
                     # Ignore packet loss when safety features are removed by the user
@@ -187,7 +225,7 @@ def clientActivity(connection, progress, name, pathWay, errorPercentageSEND,
                         if safety:
                             i -= 1
                             finalSN = i.to_bytes(4, byteorder="little")
-                            data = sequenceNumber + finalSN + checksum + messageModed
+                            data = SYN + FIN + sequenceNumber + finalSN + checksum + messageModed
                     if not lossMap:
                         clientSocket.sendto(data, (name, serverPort))
                         if nextSequenceNumber == 0:
@@ -205,7 +243,7 @@ def clientActivity(connection, progress, name, pathWay, errorPercentageSEND,
                         mailBox.put("State " + str(list[nextSequenceNumber]) + ": Sending\n")
                         messageTime += (datetime.datetime.now() - quickTime).total_seconds()
                     # Exit the loop, or keep going?
-                    if (nextSequenceNumber == len(list) - 1) or (len(list) == 0):
+                    if (nextSequenceNumber == (len(list) - 1)) or (len(list) == 0):
                         nextSequenceNumber = N
                     else:
                         nextSequenceNumber += 1
@@ -226,67 +264,66 @@ def clientActivity(connection, progress, name, pathWay, errorPercentageSEND,
                         packet = sortData(output)
                         # Inject error into the incoming ACK
                         packet["ACK"], fake = injectError(packet["ACK"], errorPercentageREC)
-                        # converted ACK into an integer
-                        packet["ACK_Int"] = int.from_bytes(packet["ACK"], byteorder="little")
                         if safety:
                             progressValue += 1
                             window += 1
                         # State Jumper
-                        ackChecksum = generateChecksum(packet["ACK_Int"], packet["SN"], i, False)
+                        ackChecksum = generateChecksum(packet["ACK_Int"], packet["SN"], i, 0, 0, False)
                         if verifyChecksum(packet["Checksum"], ackChecksum):  # Is the checksum valid?
-                            # End all alarms engaged
-                            signal.alarm(0)
-                            counter += 1
-                            if not safety:
-                                progressValue += 1
-                            if counter == N:
-                                receiveMap = False
-                                # Update the current RTT
-                                SampleRTT = datetime.datetime.now() - sampleStart
-                                EstimatedRTT = (1-α)*EstimatedRTT + (α * SampleRTT.total_seconds())
-                                DevRTT = (1-β)*DevRTT + (β * abs(SampleRTT.total_seconds() + - EstimatedRTT))
-                                # Limit how fast the connection can go, as to not overwhelm the channel and miss ACKs
-                                if (EstimatedRTT + (4 * DevRTT)) < 0.05:
-                                    EstimatedRTT = 0.05
-                                    DevRTT = 0
-                                window += 1
-                            else:
-                                # Handle the dynamic window sizes with the threshold limit engaged
-                                if window < threshold:
-                                    window += 1
-                                # Update the current RTT
-                                SampleRTT = datetime.datetime.now() - sampleStart
-                                EstimatedRTT = (1 - α) * EstimatedRTT + (α * SampleRTT.total_seconds())
-                                DevRTT = (1 - β) * DevRTT + (β * abs(SampleRTT.total_seconds() - EstimatedRTT))
-                                # Limit how fast the connection can go, as to not overwhelm the channel and miss ACKs
-                                if (EstimatedRTT + (4 * DevRTT)) < 0.05:
-                                    EstimatedRTT = 0.05
-                                    DevRTT = 0
-                                sampleStart = datetime.datetime.now()
-                                # Restart the timer
-                                signal.setitimer(signal.ITIMER_REAL, (EstimatedRTT + (4 * DevRTT)))
-                            # Remove the data packet the from the current window sequence, as it has been verified as
-                            # sent
-                            if not safety:
-                                try:
-                                    list.remove(packet["SN"])
-                                except ValueError:  # ignore when attempts are made to remove items due to repeat ACKs
-                                    pass
-                            # Update to the user what is occurring in approx. real time
-                            quickTime = datetime.datetime.now()
-                            mailBox.put("State " + str(packet["SN"]) + ": Received ACK\n")
-                            messageTime += (datetime.datetime.now() - quickTime).total_seconds()
-                            quickTime = datetime.datetime.now()
-                            progressBox.put(math.floor((progressValue / i) * 100))
-                            messageTime += (datetime.datetime.now() - quickTime).total_seconds()
-                            # Break when the sequence ends completely
-                            if not safety:
-                                if len(list) == 0:
-                                    signal.alarm(0)
-                                    finalTime = datetime.datetime.now()
-                                    mailBox.put("... Image finished sending\n")
-                                    clientMap = False
+                            if packet["ACK_Int"] == ackValue:  # is this an actual ACK?
+                                # End all alarms engaged
+                                signal.alarm(0)
+                                counter += 1
+                                if not safety:
+                                    progressValue += 1
+                                if counter == N:
                                     receiveMap = False
+                                    # Update the current RTT
+                                    SampleRTT = datetime.datetime.now() - sampleStart
+                                    EstimatedRTT = (1 - α) * EstimatedRTT + (α * SampleRTT.total_seconds())
+                                    DevRTT = (1 - β) * DevRTT + (β * abs(SampleRTT.total_seconds() + - EstimatedRTT))
+                                    # Limit how fast the connection goes, as to not overwhelm the channel and miss ACKs
+                                    if (EstimatedRTT + (4 * DevRTT)) < 0.05:
+                                        EstimatedRTT = 0.05
+                                        DevRTT = 0
+                                    window += 1
+                                else:
+                                    # Handle the dynamic window sizes with the threshold limit engaged
+                                    if window < threshold:
+                                        window += 1
+                                    # Update the current RTT
+                                    SampleRTT = datetime.datetime.now() - sampleStart
+                                    EstimatedRTT = (1 - α) * EstimatedRTT + (α * SampleRTT.total_seconds())
+                                    DevRTT = (1 - β) * DevRTT + (β * abs(SampleRTT.total_seconds() - EstimatedRTT))
+                                    # Limit how fast the connection goes, as to not overwhelm the channel and miss ACKs
+                                    if (EstimatedRTT + (4 * DevRTT)) < 0.05:
+                                        EstimatedRTT = 0.05
+                                        DevRTT = 0
+                                    sampleStart = datetime.datetime.now()
+                                    # Restart the timer
+                                    signal.setitimer(signal.ITIMER_REAL, (EstimatedRTT + (4 * DevRTT)))
+                                # Remove the data packet the from current window sequence, as it has been verified as
+                                # sent
+                                if not safety:
+                                    try:
+                                        list.remove(packet["SN"])
+                                    except ValueError:  # ignore when attempts exist to remove items due to repeat ACKs
+                                        pass
+                                # Update to the user what is occurring in approx. real time
+                                quickTime = datetime.datetime.now()
+                                mailBox.put("State " + str(packet["SN"]) + ": Received ACK\n")
+                                messageTime += (datetime.datetime.now() - quickTime).total_seconds()
+                                quickTime = datetime.datetime.now()
+                                progressBox.put(math.floor((progressValue / i) * 100))
+                                messageTime += (datetime.datetime.now() - quickTime).total_seconds()
+                                # Break when the sequence ends completely
+                                if not safety:
+                                    if len(list) == 0:
+                                        signal.alarm(0)
+                                        finalTime = datetime.datetime.now()
+                                        mailBox.put("... Image finished sending\n")
+                                        clientMap = False
+                                        receiveMap = False
             else:
                 clientMap = False
         except TypeError:
@@ -301,6 +338,60 @@ def clientActivity(connection, progress, name, pathWay, errorPercentageSEND,
             # If all fails, then send the packet of data again, nothing in the sequence advances forward
     finishTime = (finalTime - initialTime).total_seconds() - messageTime
     mailBox.put("Finish time: " + str(finishTime) + "\n")
+
+    teardownMap = True
+    # Connection Teardown
+    while teardownMap:
+        # Set the FIN bit to 1, to indicate a teardown is desired
+        FIN = (1).to_bytes(2, byteorder="little")
+        sequenceNumber = (0).to_bytes(3, byteorder="little")
+        checksum = generateChecksum(0, 0, i, 0, 1, True)
+        data = SYN + FIN + sequenceNumber + i.to_bytes(4, byteorder="little") + checksum.to_bytes(4,
+                                                                                                  byteorder="little") + b''
+        clientSocket.sendto(data, (name, serverPort))
+        # Wait for an ACK back from the server
+        try:
+            # Start a timer to see and wait for an ACK from the server (1s delay)
+            signal.setitimer(signal.ITIMER_REAL, 1)
+            # Wait for an appropriate ACK back from the server
+            output, serverAddress = clientSocket.recvfrom(buf)
+            packet = sortData(output)
+            # Verify the packet of data (Checksum and contents of the ACK, etc.)
+            ackChecksum = generateChecksum(packet["ACK_Int"], packet["SN"], i, packet["SYN"], packet["FIN"], False)
+            if verifyChecksum(packet["Checksum"], ackChecksum):
+                if packet["SYN"] == 0:
+                    if packet["FIN"] == 1:
+                            signal.alarm(0)
+        except TypeError:  # go back and try the teardown process again
+            pass
+
+        mapping = True
+        while mapping:
+            try:
+                # Wait for a FIN from the server
+                output, serverAddress = clientSocket.recvfrom(buf)
+                signal.alarm(0)
+                # Turn off any timeouts in progress
+                packet = sortData(output)
+                # Verify the packet of data (Checksum and contents of the ACK, etc.)
+                ackChecksum = generateChecksum(packet["ACK_Int"], packet["SN"], i, packet["SYN"],
+                                               packet["FIN"], False)
+                if verifyChecksum(packet["Checksum"], ackChecksum):
+                    if packet["FIN"] == 1:  # send an "ACK" back to the server
+                        checksum = generateChecksum(ackValue, 0, i, 0, 1, True)\
+                            .to_bytes(4, byteorder="little")
+                        data = SYN + FIN + sequenceNumber + i.to_bytes(4,
+                                                                       byteorder="little") + checksum + ack
+                        clientSocket.sendto(data, serverAddress)
+                        # Timeout until the connection is closed
+                        signal.setitimer(signal.ITIMER_REAL, 1)
+                else:  # Try to teardown again
+                    mapping = False
+            except TypeError:  # break out of the cycle and close the connection
+                mapping = False
+                teardownMap = False
+
+    mailBox.put("Connection Closed\n")
     mailBox.put("----------------------------------------\n")
     progressBox.put(0)
     # Close and end the process in progress
@@ -337,7 +428,7 @@ def onSelect():
     selectButton.configure(state=tk.DISABLED)
     try:
         filePath = filedialog.askopenfile(mode="r", initialdir=os.path.dirname(imagePath), filetypes=[("Image files",
-                                                                                    "*.bmp *.png *.jpg *.jpeg")]).name
+                                                                                                       "*.bmp *.png *.jpg *.jpeg")]).name
         if filePath is not None:
             imagePath = filePath
     except AttributeError:
@@ -347,8 +438,8 @@ def onSelect():
 
 
 # Generate the checksum for the given 1kB chunk of data and SN
-def generateChecksum(data, sn, fSN, flag):
-    a = sn + fSN
+def generateChecksum(data, sn, fSN, syn, fin, flag):
+    a = sn + fSN + syn + fin
     d = bin(data)[2:]
     for x in range(0, 511):
         temp = a
@@ -377,10 +468,13 @@ def verifyChecksum(value, checksum):
 # Sort the incoming data into its component forms, and return a dictionary of this information
 def sortData(data):
     dictionary = {}
-    dictionary["SN"] = int.from_bytes(data[0:2], byteorder="little")  # sequence number leads the data received
-    dictionary["Checksum"] = int.from_bytes(data[3:6], byteorder="little")  # the checksum is before the message data
+    dictionary["SYN"] = int.from_bytes(data[0:1], byteorder="little")  # SYN value for the connection process
+    dictionary["FIN"] = int.from_bytes(data[2:3], byteorder="little")  # FIN value for connection teardown
+    dictionary["SN"] = int.from_bytes(data[4:6], byteorder="little")  # sequence number leads the data received
+    dictionary["Checksum"] = int.from_bytes(data[7:10], byteorder="little")  # the checksum is before the message data
     # received (4x2 bytes long)
-    dictionary["ACK"] = data[7:]  # message data received (1024 bytes long)
+    dictionary["ACK"] = data[11:]  # message data received (1024 bytes long)
+    dictionary["ACK_Int"] = int.from_bytes(dictionary["ACK"], byteorder="little")
     return dictionary
 
 
